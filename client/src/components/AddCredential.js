@@ -271,7 +271,7 @@ const AddCredential = ({ onAddCredential, onUpdateCredential, categories, isEdit
                 Website URL
               </label>
               <div className="relative">
-                <Globe className="absolute left-3 top-1/2 transform -translate-y-1/2 text-secondary-400 w-4 h-4 pointer-events-none" />
+                <Globe className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 dark:text-gray-300 w-4 h-4 pointer-events-none" />
                 <input
                   type="url"
                   id="url"

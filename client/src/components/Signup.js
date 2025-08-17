@@ -93,7 +93,7 @@ const Signup = ({ onSignupSuccess }) => {
                   required
                   disabled={isLoading}
                 />
-                <Mail className="w-4 h-4 text-secondary-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                <Mail className="w-4 h-4 text-gray-400 dark:text-gray-300 absolute left-3 top-1/2 transform -translate-y-1/2 pointer-events-none" />
               </div>
             </div>
             <div>
@@ -109,7 +109,7 @@ const Signup = ({ onSignupSuccess }) => {
                   minLength={2}
                   disabled={isLoading}
                 />
-                <User className="w-4 h-4 text-secondary-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                <User className="w-4 h-4 text-gray-400 dark:text-gray-300 absolute left-3 top-1/2 transform -translate-y-1/2 pointer-events-none" />
               </div>
             </div>
             <div>
@@ -125,7 +125,7 @@ const Signup = ({ onSignupSuccess }) => {
                   minLength={8}
                   disabled={isLoading}
                 />
-                <KeyRound className="w-4 h-4 text-secondary-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                <KeyRound className="w-4 h-4 text-gray-400 dark:text-gray-300 absolute left-3 top-1/2 transform -translate-y-1/2 pointer-events-none" />
                 <button 
                   type="button" 
                   className="absolute right-3 top-1/2 -translate-y-1/2 text-secondary-500" 

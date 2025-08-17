@@ -191,7 +191,7 @@ const Dashboard = ({
             {/* Search */}
             <div className="flex-1">
               <div className="relative">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-secondary-400 w-4 h-4 pointer-events-none" />
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 dark:text-gray-300 w-4 h-4 pointer-events-none" />
                 <input
                   type="text"
                   placeholder="Search credentials..."
