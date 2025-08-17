@@ -439,72 +439,88 @@ const SmartCategories = ({ credentials, onUpdateCredential, onAddCredential }) =
 
       {/* Category Stats */}
       <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4">
-        {/* All Categories Card */}
-        <div
-          className={`bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-4 cursor-pointer transition-all hover:shadow-md ${
-            selectedCategory === 'all' ? 'ring-2 ring-blue-500 bg-blue-50 dark:bg-blue-900/20' : ''
-          }`}
-          onClick={() => setSelectedCategory('all')}
-        >
-          <div className="flex items-center justify-between mb-2">
-            <div 
-              className="w-10 h-10 rounded-xl flex items-center justify-center bg-blue-600 shadow-lg"
-            >
-              <Tag className="w-5 h-5 text-white" />
-            </div>
-            <span className="text-lg font-bold text-gray-900 dark:text-white">{credentials.length}</span>
-          </div>
-          <div className="text-sm font-semibold text-gray-900 dark:text-white">All Categories</div>
-        </div>
+                 {/* All Categories Card */}
+         <div
+           className={`bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-4 cursor-pointer transition-all hover:shadow-md ${
+             selectedCategory === 'all' ? 'ring-2 ring-blue-500 bg-blue-50 dark:bg-blue-900/20' : ''
+           }`}
+           onClick={() => setSelectedCategory('all')}
+         >
+           <div className="flex items-center justify-between mb-2">
+             <div 
+               className="w-10 h-10 rounded-xl flex items-center justify-center bg-blue-600 shadow-lg"
+             >
+               <Tag className="w-5 h-5 text-white" />
+             </div>
+             <span className={`text-lg font-bold ${
+               selectedCategory === 'all' 
+                 ? 'text-blue-900 dark:text-blue-100' 
+                 : 'text-gray-900 dark:text-white'
+             }`}>{credentials.length}</span>
+           </div>
+           <div className={`text-sm font-semibold ${
+             selectedCategory === 'all' 
+               ? 'text-blue-900 dark:text-blue-100' 
+               : 'text-gray-900 dark:text-white'
+           }`}>All Categories</div>
+         </div>
         
-        {categoryStats.map(category => (
-          <div
-            key={category.id}
-            className={`bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-4 cursor-pointer transition-all hover:shadow-md ${
-              selectedCategory === category.id ? 'ring-2 ring-blue-500 bg-blue-50 dark:bg-blue-900/20' : ''
-            }`}
-            onClick={() => setSelectedCategory(category.id)}
-          >
-            <div className="flex items-center justify-between mb-2">
-              <div 
-                className="w-10 h-10 rounded-xl flex items-center justify-center shadow-lg"
-                style={{ backgroundColor: category.color }}
-              >
-                <div className="text-white">
-                  {category.icon}
-                </div>
-              </div>
-              <div className="flex items-center gap-1">
-                <span className="text-lg font-bold text-gray-900 dark:text-white">{category.count}</span>
-                {category.id !== 'social' && category.id !== 'shopping' && category.id !== 'finance' && (
-                  <div className="flex items-center gap-1 ml-2">
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        editCategory(category.id);
-                      }}
-                      className="p-1 hover:bg-gray-100 dark:hover:bg-gray-700 rounded"
-                      title="Edit category"
-                    >
-                      <Edit className="w-3.5 h-3.5 text-gray-600 dark:text-gray-300" />
-                    </button>
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        deleteCategory(category.id);
-                      }}
-                      className="p-1 hover:bg-red-100 dark:hover:bg-red-900 rounded"
-                      title="Delete category"
-                    >
-                      <Trash2 className="w-3.5 h-3.5 text-red-600 dark:text-red-400" />
-                    </button>
-                  </div>
-                )}
-              </div>
-            </div>
-            <div className="text-sm font-semibold text-gray-900 dark:text-white">{category.name}</div>
-          </div>
-        ))}
+                 {categoryStats.map(category => (
+           <div
+             key={category.id}
+             className={`bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-4 cursor-pointer transition-all hover:shadow-md ${
+               selectedCategory === category.id ? 'ring-2 ring-blue-500 bg-blue-50 dark:bg-blue-900/20' : ''
+             }`}
+             onClick={() => setSelectedCategory(category.id)}
+           >
+             <div className="flex items-center justify-between mb-2">
+               <div 
+                 className="w-10 h-10 rounded-xl flex items-center justify-center shadow-lg"
+                 style={{ backgroundColor: category.color }}
+               >
+                 <div className="text-white">
+                   {category.icon}
+                 </div>
+               </div>
+               <div className="flex items-center gap-1">
+                 <span className={`text-lg font-bold ${
+                   selectedCategory === category.id 
+                     ? 'text-blue-900 dark:text-blue-100' 
+                     : 'text-gray-900 dark:text-white'
+                 }`}>{category.count}</span>
+                 {category.id !== 'social' && category.id !== 'shopping' && category.id !== 'finance' && (
+                   <div className="flex items-center gap-1 ml-2">
+                     <button
+                       onClick={(e) => {
+                         e.stopPropagation();
+                         editCategory(category.id);
+                       }}
+                       className="p-1 hover:bg-gray-100 dark:hover:bg-gray-700 rounded"
+                       title="Edit category"
+                     >
+                       <Edit className="w-3.5 h-3.5 text-gray-600 dark:text-gray-300" />
+                     </button>
+                     <button
+                       onClick={(e) => {
+                         e.stopPropagation();
+                         deleteCategory(category.id);
+                       }}
+                       className="p-1 hover:bg-red-100 dark:hover:bg-red-900 rounded"
+                       title="Delete category"
+                     >
+                       <Trash2 className="w-3.5 h-3.5 text-red-600 dark:text-red-400" />
+                     </button>
+                   </div>
+                 )}
+               </div>
+             </div>
+             <div className={`text-sm font-semibold ${
+               selectedCategory === category.id 
+                 ? 'text-blue-900 dark:text-blue-100' 
+                 : 'text-gray-900 dark:text-white'
+             }`}>{category.name}</div>
+           </div>
+         ))}
       </div>
 
       {/* Search and Filter */}
