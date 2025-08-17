@@ -1163,3 +1163,18 @@ select option:hover {
 .theme-dark span[style*="background-color"] {
   color: #ffffff !important;
 }
+
+/* Fix hover states for credential items */
+.theme-dark .hover\\:bg-gray-50:hover {
+  background-color: #374151 !important; /* dark gray instead of light gray */
+}
+
+.theme-dark .hover\\:bg-gray-800:hover {
+  background-color: #4b5563 !important; /* lighter gray for better contrast */
+}
+
+/* Ensure text remains white on hover */
+.theme-dark .hover\\:bg-gray-50:hover *,
+.theme-dark .hover\\:bg-gray-800:hover * {
+  color: #ffffff !important;
+}
