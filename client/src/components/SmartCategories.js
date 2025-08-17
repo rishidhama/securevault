@@ -452,9 +452,9 @@ const SmartCategories = ({ credentials, onUpdateCredential, onAddCredential }) =
             >
               <Tag className="w-5 h-5 text-white" />
             </div>
-            <span className="text-lg font-bold text-white-900 dark:text-white">{credentials.length}</span>
+            <span className="text-lg font-bold text-gray-900 dark:text-white">{credentials.length}</span>
           </div>
-          <div className="text-sm font-semibold text-white-900 dark:text-white">All Categories</div>
+          <div className="text-sm font-semibold text-gray-900 dark:text-white">All Categories</div>
         </div>
         
         {categoryStats.map(category => (
@@ -475,7 +475,7 @@ const SmartCategories = ({ credentials, onUpdateCredential, onAddCredential }) =
                 </div>
               </div>
               <div className="flex items-center gap-1">
-                <span className="text-lg font-bold text-white-900 dark:text-white">{category.count}</span>
+                <span className="text-lg font-bold text-gray-900 dark:text-white">{category.count}</span>
                 {category.id !== 'social' && category.id !== 'shopping' && category.id !== 'finance' && (
                   <div className="flex items-center gap-1 ml-2">
                     <button
@@ -502,7 +502,7 @@ const SmartCategories = ({ credentials, onUpdateCredential, onAddCredential }) =
                 )}
               </div>
             </div>
-            <div className="text-sm font-semibold text-grey-900 dark:text-white">{category.name}</div>
+            <div className="text-sm font-semibold text-gray-900 dark:text-white">{category.name}</div>
           </div>
         ))}
       </div>
@@ -572,8 +572,8 @@ const SmartCategories = ({ credentials, onUpdateCredential, onAddCredential }) =
                      </div>
                    </div>
                    <div>
-                     <div className="font-bold text-white-900 dark:text-white text-lg">{credential.url || 'Unknown Website'}</div>
-                     <div className="text-gray-600 dark:text-white-300 font-medium">{credential.username || 'No Username'}</div>
+                     <div className="font-bold text-gray-900 dark:text-white text-lg">{credential.url || 'Unknown Website'}</div>
+                     <div className="text-gray-600 dark:text-gray-300 font-medium">{credential.username || 'No Username'}</div>
                    </div>
                  </div>
                  <div className="flex items-center gap-2">
@@ -718,7 +718,7 @@ const SmartCategories = ({ credentials, onUpdateCredential, onAddCredential }) =
               
               {/* Select All/None Controls */}
               <div className="flex items-center justify-between mb-6 p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-800">
-                <span className="text-sm font-semibold text-white-900 dark:text-white">
+                <span className="text-sm font-semibold text-gray-900 dark:text-white">
                   {selectedImprovements.length} of {confirmData.suggestions.length} selected
                 </span>
                 <div className="flex gap-3">
