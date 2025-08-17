@@ -441,7 +441,7 @@ const SmartCategories = ({ credentials, onUpdateCredential, onAddCredential }) =
       <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4">
         {/* All Categories Card */}
         <div
-          className={`card p-4 cursor-pointer transition-all hover:shadow-md ${
+          className={`bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-4 cursor-pointer transition-all hover:shadow-md ${
             selectedCategory === 'all' ? 'ring-2 ring-blue-500 bg-blue-50 dark:bg-blue-900/20' : ''
           }`}
           onClick={() => setSelectedCategory('all')}
@@ -460,7 +460,7 @@ const SmartCategories = ({ credentials, onUpdateCredential, onAddCredential }) =
         {categoryStats.map(category => (
           <div
             key={category.id}
-            className={`card p-4 cursor-pointer transition-all hover:shadow-md ${
+            className={`bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-4 cursor-pointer transition-all hover:shadow-md ${
               selectedCategory === category.id ? 'ring-2 ring-blue-500 bg-blue-50 dark:bg-blue-900/20' : ''
             }`}
             onClick={() => setSelectedCategory(category.id)}
@@ -508,7 +508,7 @@ const SmartCategories = ({ credentials, onUpdateCredential, onAddCredential }) =
       </div>
 
       {/* Search and Filter */}
-      <div className="card">
+      <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-6">
         <div className="flex flex-col md:flex-row gap-4">
           <div className="flex-1">
             <div className="relative">
@@ -541,7 +541,7 @@ const SmartCategories = ({ credentials, onUpdateCredential, onAddCredential }) =
       </div>
 
       {/* Credentials List */}
-      <div className="card">
+      <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-6">
         <div className="flex items-center justify-between mb-6">
           <h3 className="text-xl font-bold text-gray-900 dark:text-white">
             {selectedCategory === 'all' ? 'All Credentials' : getCategoryName(selectedCategory)}
@@ -599,16 +599,17 @@ const SmartCategories = ({ credentials, onUpdateCredential, onAddCredential }) =
                        </option>
                      ))}
                    </select>
-                   <span 
-                     className="px-3 py-1 text-sm font-medium rounded-full border-2"
-                     style={{ 
-                       backgroundColor: getCategoryColor(credential.category) + '15',
-                       borderColor: getCategoryColor(credential.category) + '30',
-                       color: getCategoryColor(credential.category)
-                     }}
-                   >
-                     {getCategoryName(credential.category)}
-                   </span>
+                                        <span 
+                       className="px-3 py-1 text-sm font-medium rounded-full border-2"
+                       style={{ 
+                         backgroundColor: getCategoryColor(credential.category) + '15',
+                         borderColor: getCategoryColor(credential.category) + '30',
+                         color: getCategoryColor(credential.category),
+                         filter: 'brightness(0.8) contrast(1.2)'
+                       }}
+                     >
+                       {getCategoryName(credential.category)}
+                     </span>
                  </div>
                </div>
              ))
