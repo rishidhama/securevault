@@ -441,9 +441,9 @@ const SmartCategories = ({ credentials, onUpdateCredential, onAddCredential }) =
       <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4">
                  {/* All Categories Card */}
          <div
-           className={`bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-4 cursor-pointer transition-all hover:shadow-md ${
-             selectedCategory === 'all' ? 'ring-2 ring-blue-500 bg-blue-50 dark:bg-blue-900/20' : ''
-           }`}
+                        className={`bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-4 cursor-pointer transition-all hover:shadow-md ${
+               selectedCategory === 'all' ? 'ring-2 ring-blue-500 bg-blue-50 dark:bg-blue-900/40' : ''
+             }`}
            onClick={() => setSelectedCategory('all')}
          >
            <div className="flex items-center justify-between mb-2">
@@ -454,13 +454,13 @@ const SmartCategories = ({ credentials, onUpdateCredential, onAddCredential }) =
              </div>
              <span className={`text-lg font-bold ${
                selectedCategory === 'all' 
-                 ? 'text-blue-900 dark:text-blue-100' 
+                 ? 'text-blue-900 dark:text-blue-50' 
                  : 'text-gray-900 dark:text-white'
              }`}>{credentials.length}</span>
            </div>
            <div className={`text-sm font-semibold ${
              selectedCategory === 'all' 
-               ? 'text-blue-900 dark:text-blue-100' 
+               ? 'text-blue-900 dark:text-blue-50' 
                : 'text-gray-900 dark:text-white'
            }`}>All Categories</div>
          </div>
@@ -469,7 +469,7 @@ const SmartCategories = ({ credentials, onUpdateCredential, onAddCredential }) =
            <div
              key={category.id}
              className={`bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-4 cursor-pointer transition-all hover:shadow-md ${
-               selectedCategory === category.id ? 'ring-2 ring-blue-500 bg-blue-50 dark:bg-blue-900/20' : ''
+               selectedCategory === category.id ? 'ring-2 ring-blue-500 bg-blue-50 dark:bg-blue-900/40' : ''
              }`}
              onClick={() => setSelectedCategory(category.id)}
            >
@@ -485,7 +485,7 @@ const SmartCategories = ({ credentials, onUpdateCredential, onAddCredential }) =
                <div className="flex items-center gap-1">
                  <span className={`text-lg font-bold ${
                    selectedCategory === category.id 
-                     ? 'text-blue-900 dark:text-blue-100' 
+                     ? 'text-blue-900 dark:text-blue-50' 
                      : 'text-gray-900 dark:text-white'
                  }`}>{category.count}</span>
                  {category.id !== 'social' && category.id !== 'shopping' && category.id !== 'finance' && (
@@ -516,7 +516,7 @@ const SmartCategories = ({ credentials, onUpdateCredential, onAddCredential }) =
              </div>
              <div className={`text-sm font-semibold ${
                selectedCategory === category.id 
-                 ? 'text-blue-900 dark:text-blue-100' 
+                 ? 'text-blue-900 dark:text-blue-50' 
                  : 'text-gray-900 dark:text-white'
              }`}>{category.name}</div>
            </div>
