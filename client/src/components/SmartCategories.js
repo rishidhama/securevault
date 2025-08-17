@@ -448,11 +448,11 @@ const SmartCategories = ({ credentials, onUpdateCredential, onAddCredential }) =
          >
            <div className="flex items-center justify-between mb-2">
              <div 
-               className="w-10 h-10 rounded-xl flex items-center justify-center bg-blue-600 shadow-lg"
+               className="w-10 h-10 rounded-xl flex items-center justify-center bg-blue-600 shadow-lg flex-shrink-0"
              >
                <Tag className="w-5 h-5 text-white" />
              </div>
-             <span className={`text-lg font-bold ${
+             <span className={`text-lg font-bold ml-2 ${
                selectedCategory === 'all' 
                  ? 'text-blue-900 dark:text-blue-50' 
                  : 'text-gray-900 dark:text-white'
@@ -475,14 +475,14 @@ const SmartCategories = ({ credentials, onUpdateCredential, onAddCredential }) =
            >
              <div className="flex items-center justify-between mb-2">
                <div 
-                 className="w-10 h-10 rounded-xl flex items-center justify-center shadow-lg"
+                 className="w-10 h-10 rounded-xl flex items-center justify-center shadow-lg flex-shrink-0"
                  style={{ backgroundColor: category.color }}
                >
                  <div className="text-white">
                    {category.icon}
                  </div>
                </div>
-               <div className="flex items-center gap-1">
+               <div className="flex items-center gap-1 ml-2">
                  <span className={`text-lg font-bold ${
                    selectedCategory === category.id 
                      ? 'text-blue-900 dark:text-blue-50' 
@@ -580,16 +580,16 @@ const SmartCategories = ({ credentials, onUpdateCredential, onAddCredential }) =
                <div key={credential._id} className="flex items-center justify-between p-4 border border-gray-200 dark:border-gray-700 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800">
                  <div className="flex items-center gap-3">
                    <div 
-                     className="w-8 h-8 rounded-full flex items-center justify-center"
+                     className="w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0"
                      style={{ backgroundColor: getCategoryColor(credential.category) + '20' }}
                    >
                      <div style={{ color: getCategoryColor(credential.category) }}>
                        {getCategoryIcon(credential.category)}
                      </div>
                    </div>
-                   <div>
-                     <div className="font-bold text-gray-900 dark:text-white text-lg">{credential.url || 'Unknown Website'}</div>
-                     <div className="text-gray-600 dark:text-gray-300 font-medium">{credential.username || 'No Username'}</div>
+                   <div className="min-w-0 flex-1">
+                     <div className="font-bold text-gray-900 dark:text-white text-lg truncate">{credential.url || 'Unknown Website'}</div>
+                     <div className="text-gray-600 dark:text-gray-300 font-medium truncate">{credential.username || 'No Username'}</div>
                    </div>
                  </div>
                  <div className="flex items-center gap-2">
