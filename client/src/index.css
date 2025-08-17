@@ -1198,42 +1198,108 @@ select option:hover {
   color: #ffffff !important;
 }
 
-/* Fix SVG positioning and z-index issues */
-svg {
-  position: relative;
-  z-index: 1;
-}
-
-/* Ensure text is above SVGs */
-.text-lg,
-.text-sm,
-.text-xs,
-.font-bold,
-.font-semibold,
-.font-medium {
-  position: relative;
-  z-index: 2;
-}
-
-/* Fix icon container positioning */
-.w-10.h-10.rounded-xl,
-.w-8.h-8.rounded-lg,
-.w-6.h-6.rounded {
-  position: relative;
-  z-index: 1;
-  overflow: hidden;
-}
-
-/* Ensure proper stacking for flex items */
-.flex.items-center.justify-between *,
-.flex.items-center.gap-3 *,
-.flex.items-center.gap-2 *,
-.flex.items-center.gap-1 * {
-  position: relative;
-  z-index: 1;
-}
-
-/* Fix for search icon positioning */
-.relative .absolute {
+/* ===== SVG POSITIONING FIXES ===== */
+/* Fix SVG positioning in inputs and buttons */
+.absolute.left-3.top-1\/2.-translate-y-1\/2,
+.absolute.left-3.top-1\/2.transform.-translate-y-1\/2 {
+  position: absolute !important;
+  left: 12px !important;
+  top: 50% !important;
+  transform: translateY(-50%) !important;
   z-index: 10;
+}
+
+/* Fix SVG alignment in flex containers */
+.flex.items-center svg,
+.inline-flex.items-center svg {
+  flex-shrink: 0;
+  display: inline-block;
+  vertical-align: middle;
+}
+
+/* Fix SVG positioning in buttons */
+.btn-primary svg,
+.btn-secondary svg {
+  flex-shrink: 0;
+  display: inline-block;
+  vertical-align: middle;
+}
+
+/* Fix SVG positioning in relative containers */
+.relative svg {
+  position: relative;
+  display: inline-block;
+}
+
+/* Ensure proper spacing for SVGs with mr-2, ml-2 classes */
+svg.mr-2 {
+  margin-right: 0.5rem !important;
+}
+
+svg.ml-2 {
+  margin-left: 0.5rem !important;
+}
+
+/* Fix SVG positioning in absolute positioned containers */
+.absolute svg {
+  position: static;
+  display: inline-block;
+}
+
+/* More specific SVG positioning fixes */
+/* Fix input icons */
+input[type="email"] + svg,
+input[type="text"] + svg,
+input[type="password"] + svg {
+  position: absolute !important;
+  left: 12px !important;
+  top: 50% !important;
+  transform: translateY(-50%) !important;
+  z-index: 10;
+  pointer-events: none;
+}
+
+/* Fix button icons */
+button svg {
+  flex-shrink: 0;
+  display: inline-block;
+  vertical-align: middle;
+  margin: 0;
+}
+
+/* Fix flex container icons */
+.flex svg,
+.inline-flex svg {
+  flex-shrink: 0;
+  display: inline-block;
+  vertical-align: middle;
+}
+
+/* Fix specific positioning classes */
+.left-3 svg {
+  left: 12px !important;
+}
+
+.top-1\/2 svg {
+  top: 50% !important;
+}
+
+.-translate-y-1\/2 svg {
+  transform: translateY(-50%) !important;
+}
+
+/* Fix margin classes */
+.mr-2 svg {
+  margin-right: 0.5rem !important;
+}
+
+.ml-2 svg {
+  margin-left: 0.5rem !important;
+}
+
+/* Fix all SVG elements globally */
+svg {
+  display: inline-block;
+  vertical-align: middle;
+  flex-shrink: 0;
 }
