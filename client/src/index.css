@@ -1197,3 +1197,43 @@ select option:hover {
 .theme-dark .bg-gray-200 * {
   color: #ffffff !important;
 }
+
+/* Fix SVG positioning and z-index issues */
+svg {
+  position: relative;
+  z-index: 1;
+}
+
+/* Ensure text is above SVGs */
+.text-lg,
+.text-sm,
+.text-xs,
+.font-bold,
+.font-semibold,
+.font-medium {
+  position: relative;
+  z-index: 2;
+}
+
+/* Fix icon container positioning */
+.w-10.h-10.rounded-xl,
+.w-8.h-8.rounded-lg,
+.w-6.h-6.rounded {
+  position: relative;
+  z-index: 1;
+  overflow: hidden;
+}
+
+/* Ensure proper stacking for flex items */
+.flex.items-center.justify-between *,
+.flex.items-center.gap-3 *,
+.flex.items-center.gap-2 *,
+.flex.items-center.gap-1 * {
+  position: relative;
+  z-index: 1;
+}
+
+/* Fix for search icon positioning */
+.relative .absolute {
+  z-index: 10;
+}
