@@ -43,7 +43,7 @@ const LoginEmail = () => {
                   required
                   autoFocus
                 />
-                <Mail className="w-4 h-4 text-secondary-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                <Mail className="w-4 h-4 text-secondary-400 absolute left-3 top-1/2 transform -translate-y-1/2 pointer-events-none" />
               </div>
               {error && <p className="text-danger-600 text-sm mt-1">{error}</p>}
             </div>
