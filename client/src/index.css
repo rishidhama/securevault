@@ -1095,4 +1095,71 @@ select option:hover {
 
 .theme-dark .custom-scrollbar::-webkit-scrollbar-thumb:hover {
   background-color: #64748b;
-} 
+}
+
+/* ===== SMART CATEGORIES DARK MODE FIXES ===== */
+/* Make all text white in dark mode for SmartCategories */
+.theme-dark .text-gray-900,
+.theme-dark .text-gray-600,
+.theme-dark .text-gray-700,
+.theme-dark .text-gray-500,
+.theme-dark .text-gray-400,
+.theme-dark .text-gray-300,
+.theme-dark .text-gray-200,
+.theme-dark .text-gray-100,
+.theme-dark .text-gray-50 {
+  color: #ffffff !important;
+}
+
+/* Specific fixes for SmartCategories component */
+.theme-dark h2.text-2xl.font-bold,
+.theme-dark p.text-gray-600,
+.theme-dark span.text-lg.font-bold,
+.theme-dark div.text-sm.font-semibold,
+.theme-dark h3.text-xl.font-bold,
+.theme-dark span.px-3.py-1,
+.theme-dark div.font-bold.text-lg,
+.theme-dark div.font-medium,
+.theme-dark div.text-sm.font-medium {
+  color: #ffffff !important;
+}
+
+/* Fix for category cards and credential items */
+.theme-dark .bg-white,
+.theme-dark .bg-gray-50,
+.theme-dark .bg-gray-100,
+.theme-dark .bg-gray-200 {
+  background-color: #1e293b !important;
+}
+
+.theme-dark .border-gray-200,
+.theme-dark .border-gray-300,
+.theme-dark .border-gray-400,
+.theme-dark .border-gray-500,
+.theme-dark .border-gray-600,
+.theme-dark .border-gray-700 {
+  border-color: #475569 !important;
+}
+
+/* Fix for input fields and selects */
+.theme-dark input,
+.theme-dark select,
+.theme-dark option {
+  background-color: #334155 !important;
+  color: #ffffff !important;
+  border-color: #475569 !important;
+}
+
+.theme-dark input::placeholder {
+  color: #94a3b8 !important;
+}
+
+/* Fix for buttons */
+.theme-dark button {
+  color: #ffffff !important;
+}
+
+/* Fix for category badges */
+.theme-dark span[style*="background-color"] {
+  color: #ffffff !important;
+}
