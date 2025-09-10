@@ -23,7 +23,18 @@ export const apiRequest = async (endpoint, options = {}) => {
   
   if (!response.ok) {
     const errorData = await response.json().catch(() => ({}));
-    throw new Error(errorData.error || `API request failed: ${response.status}`);
+    const errorMessage = errorData.error || `API request failed: ${response.status}`;
+    
+    // Add more context for authentication errors
+    if (response.status === 401) {
+      throw new Error(`Authentication required: ${errorMessage}`);
+    } else if (response.status === 403) {
+      throw new Error(`Access denied: ${errorMessage}`);
+    } else if (response.status === 503) {
+      throw new Error(`Service unavailable: ${errorMessage}`);
+    }
+    
+    throw new Error(errorMessage);
   }
   
   const data = await response.json();

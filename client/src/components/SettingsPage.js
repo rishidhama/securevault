@@ -112,6 +112,13 @@ const SettingsPage = ({ user, masterKey, onLogout, credentials, decryptPassword 
     const loadExistingBackupCodes = async () => {
       if (!user?.email) return;
       
+      // Check if user is authenticated
+      const token = localStorage.getItem('securevault_token');
+      if (!token) {
+        console.log('No authentication token found, skipping MFA status check');
+        return;
+      }
+      
       try {
         const response = await mfaAPI.status();
         console.log('MFA Status Response:', response.data);
@@ -121,6 +128,10 @@ const SettingsPage = ({ user, masterKey, onLogout, credentials, decryptPassword 
         }
       } catch (error) {
         console.error('Failed to load existing backup codes:', error);
+        // Don't show error to user if it's just an authentication issue
+        if (error.message.includes('401') || error.message.includes('403')) {
+          console.log('Authentication required for MFA status');
+        }
       }
     };
 
