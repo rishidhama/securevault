@@ -56,6 +56,30 @@ const userSchema = new mongoose.Schema({
   createdAt: {
     type: Date,
     default: Date.now
+  },
+  // Billing fields
+  stripeCustomerId: {
+    type: String,
+    index: true
+  },
+  subscription: {
+    id: String,
+    status: String,
+    priceId: String,
+    currentPeriodEnd: Date,
+    cancelAtPeriodEnd: { type: Boolean, default: false }
+  },
+  // User preferences
+  preferences: {
+    notifications: {
+      securityAlerts: { type: Boolean, default: true },
+      breachNotifications: { type: Boolean, default: true },
+      weeklyReports: { type: Boolean, default: false }
+    },
+    privacy: {
+      analyticsOptIn: { type: Boolean, default: false },
+      crashReports: { type: Boolean, default: true }
+    }
   }
 }, {
   timestamps: true

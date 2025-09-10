@@ -4,6 +4,37 @@ const Credential = require('../models/Credential');
 const router = express.Router();
 
 const { authenticateToken } = require('./auth');
+const ethereumService = require('../services/ethereum-service');
+
+// Helper function to create blockchain event (non-blocking)
+const createBlockchainEvent = async (userId, action, credentialId, credentialData = null) => {
+  try {
+    if (!process.env.ETHEREUM_ENABLED || process.env.ETHEREUM_ENABLED !== 'true') {
+      return; // Skip if blockchain is disabled
+    }
+
+    const vaultData = {
+      action,
+      resource: 'CREDENTIAL',
+      id: credentialId,
+      timestamp: new Date().toISOString(),
+      ...(credentialData && { 
+        title: credentialData.title,
+        category: credentialData.category,
+        hasUrl: !!credentialData.url 
+      })
+    };
+
+    const result = await ethereumService.storeVaultHash(userId, vaultData);
+    console.log(`🔗 Blockchain event logged: ${action} credential ${credentialId} for user ${userId}`, {
+      txHash: result.txHash,
+      etherscanUrl: result.etherscanUrl
+    });
+  } catch (error) {
+    console.error(`⚠️ Blockchain event failed for ${action} credential ${credentialId}:`, error.message);
+    // Don't throw - blockchain failures shouldn't break credential operations
+  }
+};
 
 // Validation middleware for full credential updates
 const validateCredential = [
@@ -176,13 +207,9 @@ router.get('/:id', authenticateToken, async (req, res) => {
 // POST new credential
 router.post('/', authenticateToken, validateCredential, async (req, res) => {
   try {
-    // Check for validation errors
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
-      return res.status(400).json({
-        success: false,
-        errors: errors.array()
-      });
+      return res.status(400).json({ success: false, errors: errors.array() });
     }
     
     const credential = new Credential({
@@ -191,6 +218,9 @@ router.post('/', authenticateToken, validateCredential, async (req, res) => {
     });
     
     await credential.save();
+    
+    // Log to blockchain (non-blocking)
+    createBlockchainEvent(req.user.userId, 'CREATE', credential._id.toString(), credential);
     
     res.status(201).json({
       success: true,
@@ -210,13 +240,9 @@ router.post('/', authenticateToken, validateCredential, async (req, res) => {
 // PUT update credential
 router.put('/:id', authenticateToken, validatePartialUpdate, async (req, res) => {
   try {
-    // Check for validation errors
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
-      return res.status(400).json({
-        success: false,
-        errors: errors.array()
-      });
+      return res.status(400).json({ success: false, errors: errors.array() });
     }
     
     const credential = await Credential.findOneAndUpdate(
@@ -226,11 +252,11 @@ router.put('/:id', authenticateToken, validatePartialUpdate, async (req, res) =>
     ).select('-__v');
     
     if (!credential) {
-      return res.status(404).json({
-        success: false,
-        error: 'Credential not found'
-      });
+      return res.status(404).json({ success: false, error: 'Credential not found' });
     }
+    
+    // Log to blockchain (non-blocking)
+    createBlockchainEvent(req.user.userId, 'UPDATE', credential._id.toString(), credential);
     
     res.json({
       success: true,
@@ -263,22 +289,16 @@ router.delete('/:id', authenticateToken, async (req, res) => {
     });
     
     if (!credential) {
-      return res.status(404).json({
-        success: false,
-        error: 'Credential not found'
-      });
+      return res.status(404).json({ success: false, error: 'Credential not found' });
     }
     
-    res.json({
-      success: true,
-      message: 'Credential deleted successfully'
-    });
+    // Log to blockchain (non-blocking)
+    createBlockchainEvent(req.user.userId, 'DELETE', credential._id.toString(), credential);
+    
+    res.json({ success: true, message: 'Credential deleted successfully' });
   } catch (error) {
     console.error('Error deleting credential:', error);
-    res.status(500).json({
-      success: false,
-      error: 'Failed to delete credential'
-    });
+    res.status(500).json({ success: false, error: 'Failed to delete credential' });
   }
 });
 
@@ -290,13 +310,9 @@ router.patch('/:id/category', authenticateToken, [
     .withMessage('Category cannot exceed 50 characters')
 ], async (req, res) => {
   try {
-    // Check for validation errors
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
-      return res.status(400).json({
-        success: false,
-        errors: errors.array()
-      });
+      return res.status(400).json({ success: false, errors: errors.array() });
     }
     
     const credential = await Credential.findOneAndUpdate(
@@ -306,40 +322,23 @@ router.patch('/:id/category', authenticateToken, [
     ).select('-__v');
     
     if (!credential) {
-      return res.status(404).json({
-        success: false,
-        error: 'Credential not found'
-      });
+      return res.status(404).json({ success: false, error: 'Credential not found' });
     }
     
-    res.json({
-      success: true,
-      message: 'Category updated successfully',
-      data: credential
-    });
+    res.json({ success: true, message: 'Category updated successfully', data: credential });
   } catch (error) {
     console.error('Error updating category:', error);
-    res.status(500).json({
-      success: false,
-      error: 'Failed to update category',
-      details: error.message
-    });
+    res.status(500).json({ success: false, error: 'Failed to update category', details: error.message });
   }
 });
 
 // PATCH toggle favorite status
 router.patch('/:id/favorite', authenticateToken, async (req, res) => {
   try {
-    const credential = await Credential.findOne({ 
-      _id: req.params.id, 
-      userId: req.user.userId 
-    });
+    const credential = await Credential.findOne({ _id: req.params.id, userId: req.user.userId });
     
     if (!credential) {
-      return res.status(404).json({
-        success: false,
-        error: 'Credential not found'
-      });
+      return res.status(404).json({ success: false, error: 'Credential not found' });
     }
     
     await credential.toggleFavorite();
@@ -351,10 +350,7 @@ router.patch('/:id/favorite', authenticateToken, async (req, res) => {
     });
   } catch (error) {
     console.error('Error toggling favorite:', error);
-    res.status(500).json({
-      success: false,
-      error: 'Failed to toggle favorite status'
-    });
+    res.status(500).json({ success: false, error: 'Failed to toggle favorite status' });
   }
 });
 
@@ -362,16 +358,10 @@ router.patch('/:id/favorite', authenticateToken, async (req, res) => {
 router.get('/categories/list', authenticateToken, async (req, res) => {
   try {
     const categories = await Credential.distinct('category', { userId: req.user.userId });
-    res.json({
-      success: true,
-      data: categories
-    });
+    res.json({ success: true, data: categories });
   } catch (error) {
     console.error('Error fetching categories:', error);
-    res.status(500).json({
-      success: false,
-      error: 'Failed to fetch categories'
-    });
+    res.status(500).json({ success: false, error: 'Failed to fetch categories' });
   }
 });
 
@@ -379,26 +369,13 @@ router.get('/categories/list', authenticateToken, async (req, res) => {
 router.get('/stats/overview', authenticateToken, async (req, res) => {
   try {
     const totalCredentials = await Credential.countDocuments({ userId: req.user.userId });
-    const favoriteCredentials = await Credential.countDocuments({ 
-      userId: req.user.userId, 
-      isFavorite: true 
-    });
+    const favoriteCredentials = await Credential.countDocuments({ userId: req.user.userId, isFavorite: true });
     const categories = await Credential.distinct('category', { userId: req.user.userId });
     
-    res.json({
-      success: true,
-      data: {
-        total: totalCredentials,
-        favorites: favoriteCredentials,
-        categories: categories.length
-      }
-    });
+    res.json({ success: true, data: { total: totalCredentials, favorites: favoriteCredentials, categories: categories.length } });
   } catch (error) {
     console.error('Error fetching stats:', error);
-    res.status(500).json({
-      success: false,
-      error: 'Failed to fetch statistics'
-    });
+    res.status(500).json({ success: false, error: 'Failed to fetch statistics' });
   }
 });
 

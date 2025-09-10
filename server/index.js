@@ -5,10 +5,12 @@ const helmet = require('helmet');
 const rateLimit = require('express-rate-limit');
 require('dotenv').config();
 
-const credentialRoutes = require('./routes/credentials');
 const authRoutes = require('./routes/auth');
+const credentialRoutes = require('./routes/credentials');
 const mfaRoutes = require('./routes/mfa');
 const importExportRoutes = require('./routes/import-export');
+const billingRoutes = require('./routes/billing');
+const blockchainRoutes = require('./routes/blockchain');
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -170,6 +172,8 @@ app.use('/api/auth', authRoutes);
 app.use('/api/mfa', mfaRoutes);
 app.use('/api/import-export', importExportRoutes);
 app.use('/api/credentials', credentialRoutes);
+app.use('/api/billing', billingRoutes);
+app.use('/api/blockchain', blockchainRoutes);
 
 // Health check endpoint
 app.get('/api/health', (req, res) => {
@@ -178,6 +182,7 @@ app.get('/api/health', (req, res) => {
   res.json({ 
     status: 'OK', 
     message: 'SecureVault API is running',
+
     database: {
       status: dbStatus,
       readyState: mongoose.connection.readyState,

@@ -27,7 +27,9 @@ import {
 import { toast } from 'react-hot-toast';
 import BiometricAuth from './BiometricAuth';
 import BackupCodesManager from './BackupCodesManager';
-import { authAPI, mfaAPI } from '../services/api';
+import { authAPI, mfaAPI, billingAPI } from '../services/api';
+import IntegrityPanel from './IntegrityPanel';
+import BlockchainStatus from './BlockchainStatus';
 
 const SettingsPage = ({ user, masterKey, onLogout, credentials, decryptPassword }) => {
   console.log('SettingsPage rendered with props:', {
@@ -57,6 +59,17 @@ const SettingsPage = ({ user, masterKey, onLogout, credentials, decryptPassword 
   const [showBiometricModal, setShowBiometricModal] = useState(false);
   const [showBackupCodesModal, setShowBackupCodesModal] = useState(false);
   const [biometricEnabled, setBiometricEnabled] = useState(false);
+  const [preferences, setPreferences] = useState({
+    notifications: {
+      securityAlerts: true,
+      breachNotifications: true,
+      weeklyReports: false
+    },
+    privacy: {
+      analyticsOptIn: false,
+      crashReports: true
+    }
+  });
 
   // Check if biometric is enabled for this user
   useEffect(() => {
@@ -65,6 +78,34 @@ const SettingsPage = ({ user, masterKey, onLogout, credentials, decryptPassword 
       setBiometricEnabled(stored === 'true');
     }
   }, [user?.email]);
+
+  // Load user preferences
+  useEffect(() => {
+    const loadPreferences = async () => {
+      try {
+        const res = await authAPI.preferences.get();
+        if (res?.success && res.data) {
+          setPreferences(prev => ({ ...prev, ...res.data }));
+        }
+      } catch (e) {
+        console.warn('Failed to load preferences, using defaults');
+      }
+    };
+    if (user) loadPreferences();
+  }, [user]);
+
+  const handleUpdatePref = async (section, key, value) => {
+    const updated = {
+      ...preferences,
+      [section]: { ...preferences[section], [key]: value }
+    };
+    setPreferences(updated);
+    try {
+      await authAPI.preferences.update(updated);
+    } catch (e) {
+      toast.error('Failed to save preference');
+    }
+  };
 
   // Load existing backup codes when component mounts
   useEffect(() => {
@@ -553,6 +594,8 @@ const SettingsPage = ({ user, masterKey, onLogout, credentials, decryptPassword 
               <p className="text-secondary-600">Manage your master key, biometric authentication, and backup codes</p>
             </div>
             <div className="space-y-6">
+              <BlockchainStatus />
+              <IntegrityPanel />
               {/* Master Key and MFA Section */}
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div className="bg-secondary-50 p-4 rounded-lg">
@@ -828,7 +871,12 @@ const SettingsPage = ({ user, masterKey, onLogout, credentials, decryptPassword 
                     </div>
                   </div>
                   <label className="relative inline-flex items-center cursor-pointer">
-                    <input type="checkbox" className="sr-only peer" defaultChecked />
+                    <input 
+                      type="checkbox" 
+                      className="sr-only peer" 
+                      checked={preferences.notifications.securityAlerts}
+                      onChange={(e) => handleUpdatePref('notifications', 'securityAlerts', e.target.checked)}
+                    />
                     <div className="w-11 h-6 bg-secondary-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-primary-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary-600"></div>
                   </label>
                 </div>
@@ -845,7 +893,12 @@ const SettingsPage = ({ user, masterKey, onLogout, credentials, decryptPassword 
                     </div>
                   </div>
                   <label className="relative inline-flex items-center cursor-pointer">
-                    <input type="checkbox" className="sr-only peer" defaultChecked />
+                    <input 
+                      type="checkbox" 
+                      className="sr-only peer" 
+                      checked={preferences.notifications.breachNotifications}
+                      onChange={(e) => handleUpdatePref('notifications', 'breachNotifications', e.target.checked)}
+                    />
                     <div className="w-11 h-6 bg-secondary-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-primary-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary-600"></div>
                   </label>
                 </div>
@@ -862,7 +915,12 @@ const SettingsPage = ({ user, masterKey, onLogout, credentials, decryptPassword 
                     </div>
                   </div>
                   <label className="relative inline-flex items-center cursor-pointer">
-                    <input type="checkbox" className="sr-only peer" />
+                    <input 
+                      type="checkbox" 
+                      className="sr-only peer" 
+                      checked={preferences.notifications.weeklyReports}
+                      onChange={(e) => handleUpdatePref('notifications', 'weeklyReports', e.target.checked)}
+                    />
                     <div className="w-11 h-6 bg-secondary-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-primary-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary-600"></div>
                   </label>
                 </div>
@@ -980,7 +1038,12 @@ const SettingsPage = ({ user, masterKey, onLogout, credentials, decryptPassword 
                     </div>
                   </div>
                   <label className="relative inline-flex items-center cursor-pointer">
-                    <input type="checkbox" className="sr-only peer" />
+                    <input 
+                      type="checkbox" 
+                      className="sr-only peer" 
+                      checked={preferences.privacy.analyticsOptIn}
+                      onChange={(e) => handleUpdatePref('privacy', 'analyticsOptIn', e.target.checked)}
+                    />
                     <div className="w-11 h-6 bg-secondary-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-primary-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary-600"></div>
                   </label>
                 </div>
@@ -997,7 +1060,12 @@ const SettingsPage = ({ user, masterKey, onLogout, credentials, decryptPassword 
                     </div>
                   </div>
                   <label className="relative inline-flex items-center cursor-pointer">
-                    <input type="checkbox" className="sr-only peer" defaultChecked />
+                    <input 
+                      type="checkbox" 
+                      className="sr-only peer" 
+                      checked={preferences.privacy.crashReports}
+                      onChange={(e) => handleUpdatePref('privacy', 'crashReports', e.target.checked)}
+                    />
                     <div className="w-11 h-6 bg-secondary-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-primary-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary-600"></div>
                   </label>
                 </div>
@@ -1016,34 +1084,136 @@ const SettingsPage = ({ user, masterKey, onLogout, credentials, decryptPassword 
         return (
           <div className="p-6">
             <div className="mb-6">
-              <h3 className="text-xl font-semibold text-secondary-900 mb-2">Billing Information</h3>
-              <p className="text-secondary-600">Manage your subscription and billing details</p>
+              <h3 className="text-xl font-semibold text-secondary-900 mb-2">Billing & Subscription</h3>
+              <p className="text-secondary-600">Manage your plan, payment methods and invoices</p>
             </div>
             <div className="space-y-6">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="bg-secondary-50 p-4 rounded-lg">
-                  <div className="flex items-center gap-2 mb-2">
-                    <CreditCard className="w-4 h-4 text-primary-600" />
-                    <label className="text-sm font-medium text-secondary-700">Current Plan</label>
+              {/* Current Plan */}
+              <div className="bg-white dark:bg-gray-800 border border-secondary-200 dark:border-gray-700 rounded-xl p-6">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <CreditCard className="w-5 h-5 text-primary-600" />
+                    <div>
+                      <div className="text-sm text-secondary-600 dark:text-gray-300">Current Plan</div>
+                      <div className="text-lg font-semibold text-secondary-900 dark:text-white capitalize">Free</div>
                   </div>
-                  <p className="text-lg font-semibold text-secondary-900">Free Plan</p>
                 </div>
-                <div className="bg-secondary-50 p-4 rounded-lg">
-                  <div className="flex items-center gap-2 mb-2">
-                    <Calendar className="w-4 h-4 text-primary-600" />
-                    <label className="text-sm font-medium text-secondary-700">Next Billing Date</label>
+                  <div className="flex items-center gap-3">
+                    <button
+                      onClick={async () => {
+                        try {
+                          const priceId = (process.env.REACT_APP_STRIPE_PRICE_PRO || '').trim();
+                          if (!priceId) {
+                            toast.error('Billing not configured');
+                            return;
+                          }
+                          const res = await billingAPI.checkout(priceId);
+                          window.location.href = res.data.url;
+                        } catch (e) {
+                          toast.error(e.message || 'Failed to start checkout');
+                        }
+                      }}
+                      className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-lg"
+                    >
+                      Upgrade
+                    </button>
+                    <button
+                      onClick={async () => {
+                        try {
+                          const res = await billingAPI.portal();
+                          window.location.href = res.data.url;
+                        } catch (e) {
+                          toast.error(e.message || 'Failed to open billing portal');
+                        }
+                      }}
+                      className="px-4 py-2 bg-secondary-100 dark:bg-gray-700 hover:bg-secondary-200 dark:hover:bg-gray-600 text-secondary-700 dark:text-gray-300 font-medium rounded-lg"
+                    >
+                      Manage
+                    </button>
                   </div>
-                  <p className="text-lg font-semibold text-secondary-900">N/A (Free Plan)</p>
                 </div>
               </div>
-              <div className="bg-primary-50 p-6 rounded-lg border border-primary-200">
-                <div className="text-center">
-                  <h4 className="text-lg font-semibold text-primary-900 mb-2">Upgrade to Pro</h4>
-                  <p className="text-primary-700 mb-4">Get unlimited passwords, advanced security features, and priority support</p>
-                  <button className="btn-primary flex items-center gap-2 mx-auto">
-                    <CreditCard className="w-4 h-4" />
-                    Upgrade to Pro
+
+              {/* Plans */}
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                {[{id:'free',name:'Free',price:'$0',period:'/mo',features:['Unlimited local entries','Client-side encryption','Basic breach monitor','Manual backup/export']},{id:'pro',name:'Pro',price:'$4.99',period:'/mo',highlighted:true,features:['Everything in Free','Cloud backup sync','Advanced breach monitor','Priority support']},{id:'team',name:'Team',price:'$9.99',period:'/mo',features:['Everything in Pro','Multi-user vault','Team roles & permissions','Audit logs']}].map(plan => (
+                  <div key={plan.id} className={`bg-white dark:bg-gray-800 border rounded-xl p-6 ${plan.highlighted ? 'border-blue-500 ring-1 ring-blue-500' : 'border-secondary-200 dark:border-gray-700'}`}>
+                    <div className="flex items-center justify-between mb-2">
+                      <h4 className="text-lg font-semibold text-secondary-900 dark:text-white">{plan.name}</h4>
+                      {plan.highlighted && (
+                        <span className="text-xs px-2 py-1 rounded-full bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300">Popular</span>
+                      )}
+                    </div>
+                    <div className="text-3xl font-bold text-secondary-900 dark:text-white">{plan.price}<span className="text-base font-medium text-secondary-600 dark:text-gray-300">{plan.period}</span></div>
+                    <ul className="mt-4 space-y-2">
+                      {plan.features.map((f, i) => (
+                        <li key={i} className="flex items-center gap-2 text-secondary-700 dark:text-gray-300">
+                          <span className="w-1.5 h-1.5 rounded-full bg-green-500"></span>
+                          <span>{f}</span>
+                        </li>
+                      ))}
+                    </ul>
+                    <button className={`mt-6 w-full px-4 py-2 rounded-lg font-medium ${plan.highlighted ? 'bg-blue-600 hover:bg-blue-700 text-white' : 'bg-secondary-100 dark:bg-gray-700 hover:bg-secondary-200 dark:hover:bg-gray-600 text-secondary-700 dark:text-gray-300'}`}>
+                      Choose Plan
                   </button>
+                </div>
+                ))}
+              </div>
+
+              {/* Payment Methods */}
+              <div className="bg-white dark:bg-gray-800 border border-secondary-200 dark:border-gray-700 rounded-xl p-6">
+                <div className="flex items-center gap-3 mb-4">
+                  <CreditCard className="w-5 h-5 text-secondary-600 dark:text-gray-300" />
+                  <h4 className="text-lg font-semibold text-secondary-900 dark:text-white">Payment Methods</h4>
+                </div>
+                <div className="flex items-center justify-between p-4 border border-secondary-200 dark:border-gray-700 rounded-lg">
+                  <div className="flex items-center gap-3 min-w-0">
+                    <CreditCard className="w-5 h-5 text-secondary-600 dark:text-gray-300 flex-shrink-0" />
+                    <div className="min-w-0">
+                      <div className="font-medium text-secondary-900 dark:text-white truncate">Visa •••• 4242</div>
+                      <div className="text-sm text-secondary-600 dark:text-gray-300 truncate">Expires 12/27</div>
+                    </div>
+                  </div>
+                  <button className="px-3 py-1.5 bg-secondary-100 dark:bg-gray-700 hover:bg-secondary-200 dark:hover:bg-gray-600 text-secondary-700 dark:text-gray-300 rounded-lg text-sm">Remove</button>
+                </div>
+                <button className="mt-4 px-4 py-2 bg-secondary-100 dark:bg-gray-700 hover:bg-secondary-200 dark:hover:bg-gray-600 text-secondary-700 dark:text-gray-300 rounded-lg">Add Payment Method</button>
+              </div>
+
+              {/* Billing History */}
+              <div className="bg-white dark:bg-gray-800 border border-secondary-200 dark:border-gray-700 rounded-xl p-6">
+                <div className="flex items-center gap-3 mb-4">
+                  <Calendar className="w-5 h-5 text-secondary-600 dark:text-gray-300" />
+                  <h4 className="text-lg font-semibold text-secondary-900 dark:text-white">Billing History</h4>
+                </div>
+                <div className="overflow-x-auto">
+                  <table className="min-w-full text-sm">
+                    <thead>
+                      <tr className="text-left text-secondary-600 dark:text-gray-300">
+                        <th className="py-2">Invoice</th>
+                        <th className="py-2">Date</th>
+                        <th className="py-2">Amount</th>
+                        <th className="py-2">Status</th>
+                        <th className="py-2">Action</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {[{ id: 'inv_001', date: '2025-07-01', amount: '$4.99', status: 'Paid' },{ id: 'inv_002', date: '2025-08-01', amount: '$4.99', status: 'Paid' }].map(row => (
+                        <tr key={row.id} className="border-t border-secondary-200 dark:border-gray-700 text-secondary-900 dark:text-white">
+                          <td className="py-2">{row.id}</td>
+                          <td className="py-2">{row.date}</td>
+                          <td className="py-2">{row.amount}</td>
+                          <td className="py-2">
+                            <span className="px-2 py-1 rounded-full text-xs bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300">{row.status}</span>
+                          </td>
+                          <td className="py-2">
+                            <button className="inline-flex items-center gap-2 px-3 py-1.5 bg-secondary-100 dark:bg-gray-700 hover:bg-secondary-200 dark:hover:bg-gray-600 text-secondary-700 dark:text-gray-300 rounded-lg">
+                              Download
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
                 </div>
               </div>
             </div>

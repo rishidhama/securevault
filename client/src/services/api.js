@@ -70,7 +70,14 @@ export const authAPI = {
   
   logout: () => apiRequest('/api/auth/logout', {
     method: 'POST'
-  })
+  }),
+  preferences: {
+    get: () => apiRequest('/api/auth/preferences'),
+    update: (preferences) => apiRequest('/api/auth/preferences', {
+      method: 'PUT',
+      body: JSON.stringify(preferences)
+    })
+  }
 };
 
 // MFA API endpoints
@@ -155,8 +162,37 @@ export const credentialsAPI = {
   })
 };
 
+// Billing API endpoints
+export const billingAPI = {
+  status: () => apiRequest('/api/billing/status'),
+  checkout: (priceId) => apiRequest('/api/billing/checkout', {
+    method: 'POST',
+    body: JSON.stringify({ priceId })
+  }),
+  portal: () => apiRequest('/api/billing/portal', { method: 'POST' })
+};
+
+// Blockchain API endpoints (Sepolia)
+export const blockchainAPI = {
+  status: () => apiRequest('/api/blockchain/status'),
+  storeVault: (userId, vaultData) => apiRequest('/api/blockchain/store-vault', {
+    method: 'POST',
+    body: JSON.stringify({ userId, vaultData })
+  }),
+  getVault: (userId) => apiRequest(`/api/blockchain/vault/${encodeURIComponent(userId)}`),
+  history: (userId) => apiRequest(`/api/blockchain/history/${encodeURIComponent(userId)}`),
+  verify: (userId, vaultData) => apiRequest('/api/blockchain/verify', {
+    method: 'POST',
+    body: JSON.stringify({ userId, vaultData })
+  })
+};
+
+// Legacy integrity API removed - now using blockchain API
+
 export default {
   auth: authAPI,
   mfa: mfaAPI,
-  credentials: credentialsAPI
+  credentials: credentialsAPI,
+  billing: billingAPI,
+  blockchain: blockchainAPI
 }; 

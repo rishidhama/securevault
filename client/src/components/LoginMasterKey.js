@@ -53,10 +53,33 @@ const LoginMasterKey = ({ onLoginSuccess }) => {
       const hasCredential = localStorage.getItem(`biometric_credential_${emailFromState}`);
       const hasMasterKey = localStorage.getItem(`securevault_master_key`) || localStorage.getItem(`securevault_master_key_${emailFromState}`);
       
-      // Check if biometric is properly set up
+      // Check if biometric is properly set up locally
       if (stored === 'true' && hasCredential && hasMasterKey) {
-        setBiometricEnabled(true);
-        return;
+        // Verify with server that biometric is still enabled
+        try {
+          const response = await fetch('http://localhost:5000/api/auth/biometric-challenge', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              email: emailFromState
+            })
+          });
+          
+          if (response.ok) {
+            setBiometricEnabled(true);
+            return;
+          } else {
+            // Server says biometric is not enabled, clear local data
+            clearIncompleteBiometricData();
+            return;
+          }
+        } catch (serverError) {
+          // If server check fails, fall back to local check
+          setBiometricEnabled(true);
+          return;
+        }
       }
       
       // If biometric is marked as enabled but missing required data, clear it
@@ -71,8 +94,131 @@ const LoginMasterKey = ({ onLoginSuccess }) => {
     }
   };
 
+  const setupBiometric = async () => {
+    if (!biometricSupported) {
+      toast.error('Biometric authentication not supported on this device');
+      return;
+    }
+
+    try {
+      setIsLoading(true);
+      setError('');
+
+      // Check if we have a master key stored
+      const masterKey = localStorage.getItem('securevault_master_key') || localStorage.getItem(`securevault_master_key_${emailFromState}`);
+      if (!masterKey || masterKey.length < 8) {
+        throw new Error('Master key is required to enable biometric authentication. Please log in with your master key first.');
+      }
+
+      // Create credential options with better error handling
+      const credentialOptions = {
+        publicKey: {
+          rp: {
+            name: 'SecureVault',
+            id: window.location.hostname || 'localhost'
+          },
+          user: {
+            id: new TextEncoder().encode(emailFromState),
+            name: emailFromState,
+            displayName: emailFromState
+          },
+          pubKeyCredParams: [
+            { type: 'public-key', alg: -7 }, // ES256
+            { type: 'public-key', alg: -257 }, // RS256
+            { type: 'public-key', alg: -37 }, // PS256
+            { type: 'public-key', alg: -35 } // RS1
+          ],
+          authenticatorSelection: {
+            authenticatorAttachment: 'platform',
+            userVerification: 'required',
+            requireResidentKey: false
+          },
+          challenge: crypto.getRandomValues(new Uint8Array(32)),
+          timeout: 120000, // Increased timeout
+          attestation: 'none' // Don't require attestation for better compatibility
+        }
+      };
+
+      console.log('Creating biometric credential with options:', credentialOptions);
+
+      // Create credential with user interaction
+      const credential = await window.navigator.credentials.create(credentialOptions);
+      
+      if (!credential) {
+        throw new Error('Failed to create biometric credential - user may have cancelled');
+      }
+
+      console.log('Credential created successfully:', credential);
+
+      // Store credential locally
+      const credentialData = {
+        id: credential.id,
+        type: credential.type,
+        rawId: Array.from(new Uint8Array(credential.rawId)),
+        response: {
+          attestationObject: Array.from(new Uint8Array(credential.response.attestationObject)),
+          clientDataJSON: Array.from(new Uint8Array(credential.response.clientDataJSON))
+        }
+      };
+
+      // Store credential data
+      localStorage.setItem(`biometric_credential_${emailFromState}`, JSON.stringify(credentialData));
+      localStorage.setItem(`biometric_enabled_${emailFromState}`, 'true');
+      localStorage.setItem(`securevault_master_key_${emailFromState}`, masterKey);
+
+      // Send credential to server for storage
+      try {
+        const response = await fetch('http://localhost:5000/api/auth/enable-biometric', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${localStorage.getItem('securevault_token')}`
+          },
+          body: JSON.stringify({
+            credentialData: credentialData
+          })
+        });
+
+        if (!response.ok) {
+          const errorData = await response.json().catch(() => ({}));
+          throw new Error(errorData.error || 'Failed to enable biometric authentication on server');
+        }
+
+        const result = await response.json();
+        console.log('Server response:', result);
+      } catch (serverError) {
+        console.warn('Failed to store credential on server:', serverError);
+        // Continue with local storage only - this is acceptable for demo
+      }
+
+      setBiometricEnabled(true);
+      toast.success('Biometric authentication enabled successfully!');
+      
+    } catch (error) {
+      console.error('Biometric setup failed:', error);
+      
+      let errorMessage = 'Failed to setup biometric authentication';
+      
+      if (error.name === 'NotAllowedError') {
+        errorMessage = 'Biometric setup was cancelled or not allowed. Please try again and make sure to allow the browser to access your biometric data.';
+      } else if (error.name === 'NotSupportedError') {
+        errorMessage = 'Biometric authentication is not supported on this device or browser.';
+      } else if (error.name === 'SecurityError') {
+        errorMessage = 'Security error occurred. Please make sure you are using HTTPS or localhost.';
+      } else if (error.name === 'InvalidStateError') {
+        errorMessage = 'Biometric credential already exists. Please try logging in with biometrics instead.';
+      } else if (error.message) {
+        errorMessage = error.message;
+      }
+      
+      toast.error(errorMessage);
+      setError(errorMessage);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   const handleBiometricUnlock = async () => {
-    
     if (!biometricSupported || !biometricEnabled) {
       toast.error('Biometric authentication not available');
       return;
@@ -82,41 +228,32 @@ const LoginMasterKey = ({ onLoginSuccess }) => {
       setIsLoading(true);
       setError('');
 
-      // First, get a challenge from the server
-      const challengeResponse = await fetch('http://localhost:5000/api/auth/biometric-challenge', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          email: emailFromState
-        })
-      });
-
-      if (!challengeResponse.ok) {
-        throw new Error('Failed to get biometric challenge');
+      // Get stored credential data
+      const storedCredential = localStorage.getItem(`biometric_credential_${emailFromState}`);
+      if (!storedCredential) {
+        throw new Error('No biometric credential found. Please set up biometric authentication first.');
       }
 
-      const challengeData = await challengeResponse.json();
+      const credentialData = JSON.parse(storedCredential);
+      console.log('Using stored credential:', credentialData);
 
-      if (!challengeData.success) {
-        throw new Error(challengeData.error || 'Failed to get challenge');
-      }
-
-      // Convert challenge from array to ArrayBuffer
-      const challengeBuffer = new Uint8Array(challengeData.data.challenge);
+      // Create a simple challenge for local verification
+      const challenge = crypto.getRandomValues(new Uint8Array(32));
 
       // Create assertion options
       const assertionOptions = {
-        challenge: challengeBuffer,
-        rpId: 'localhost', // Use consistent localhost for development
+        challenge: challenge,
+        rpId: window.location.hostname || 'localhost',
         userVerification: 'required',
-        timeout: 60000,
-        allowCredentials: challengeData.data.allowCredentials ? challengeData.data.allowCredentials.map(cred => ({
-          ...cred,
-          id: new Uint8Array(cred.id)
-        })) : []
+        timeout: 120000,
+        allowCredentials: [{
+          id: new Uint8Array(credentialData.rawId),
+          type: credentialData.type,
+          transports: ['internal']
+        }]
       };
+
+      console.log('Getting biometric assertion with options:', assertionOptions);
 
       // Get assertion from authenticator
       const assertion = await window.navigator.credentials.get({
@@ -124,84 +261,102 @@ const LoginMasterKey = ({ onLoginSuccess }) => {
       });
 
       if (!assertion) {
-        throw new Error('Biometric verification failed');
+        throw new Error('Biometric verification failed - user may have cancelled');
       }
 
-      // Convert assertion to base64 for transmission
-      const assertionData = {
-        id: assertion.id, // Use the credential ID directly (it's already base64)
-        type: assertion.type,
-        response: {
-          authenticatorData: btoa(String.fromCharCode(...new Uint8Array(assertion.response.authenticatorData))),
-          clientDataJSON: btoa(String.fromCharCode(...new Uint8Array(assertion.response.clientDataJSON))),
-          signature: btoa(String.fromCharCode(...new Uint8Array(assertion.response.signature)))
-        }
-      };
+      console.log('Biometric assertion successful:', assertion);
 
-      // Send assertion to server for verification
-      const loginResponse = await fetch('http://localhost:5000/api/auth/biometric-login', {
+      // Get stored master key
+      let storedMasterKey = localStorage.getItem('securevault_master_key') || localStorage.getItem(`securevault_master_key_${emailFromState}`);
+      
+      if (!storedMasterKey || storedMasterKey.length < 8) {
+        throw new Error('No stored master key found. Please log in with your master key to re-setup biometrics.');
+      }
+
+      // Get the real user data from the server
+      const tokenResponse = await fetch('http://localhost:5000/api/auth/biometric-auth', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
           email: emailFromState,
-          assertion: assertionData,
-          challenge: Array.from(challengeBuffer)
+          biometricVerified: true
         })
       });
 
-      if (loginResponse.ok) {
-        const data = await loginResponse.json();
+      if (tokenResponse.ok) {
+        const tokenData = await tokenResponse.json();
         
-        if (data.success) {
-          // Store authentication data
-          localStorage.setItem('securevault_token', data.data.token);
-          localStorage.setItem('securevault_user', JSON.stringify(data.data.user));
-          
-          // After biometric authentication, we need to get the stored master key
-          // Check if we have a stored master key for this user
-          let storedMasterKey = localStorage.getItem('securevault_master_key');
-          
-          // If not found in general storage, try user-specific storage
-          if (!storedMasterKey || storedMasterKey.length < 8) {
-            storedMasterKey = localStorage.getItem(`securevault_master_key_${emailFromState}`);
-          }
-          
-          if (storedMasterKey && storedMasterKey.length >= 8) {
-            // Use the stored master key
-            toast.success('Biometric authentication successful!');
-            
-            // Call parent callback if provided
-            if (onLoginSuccess) {
-              onLoginSuccess({
-                user: data.data.user,
-                token: data.data.token,
-                masterKey: storedMasterKey
-              });
-            }
-            
-            // Navigate to dashboard
-            navigate('/');
-          } else {
-            // No stored master key - this shouldn't happen if biometric was set up properly
-            console.error('No stored master key found for biometric authentication');
-            toast.error('Biometric setup incomplete. Please log in with your master key to re-setup biometrics.');
-            setError('Biometric setup incomplete');
-            
-            // Clear the incomplete biometric data to allow re-setup
-            clearIncompleteBiometricData();
+        // Get the real user data from localStorage or create a proper user object
+        const existingUser = localStorage.getItem('securevault_user');
+        let userData;
+        
+        if (existingUser) {
+          try {
+            const parsedUser = JSON.parse(existingUser);
+            // Update the user with the new token but keep the real user data
+            userData = {
+              ...parsedUser,
+              id: parsedUser.id || 'biometric-user-id',
+              email: emailFromState,
+              mfaEnabled: parsedUser.mfaEnabled || false
+            };
+          } catch (e) {
+            // Fallback to token data if parsing fails
+            userData = tokenData.data.user;
           }
         } else {
-          throw new Error(data.error || 'Authentication failed');
+          // Create a proper user object with the email
+          userData = {
+            id: 'biometric-user-id',
+            email: emailFromState,
+            name: emailFromState.split('@')[0], // Use email prefix as name
+            mfaEnabled: false
+          };
         }
+        
+        // Store authentication data
+        localStorage.setItem('securevault_token', tokenData.data.token);
+        localStorage.setItem('securevault_user', JSON.stringify(userData));
+        localStorage.setItem('securevault_master_key', storedMasterKey);
+        
+        toast.success('Biometric authentication successful!');
+        
+        // Call parent callback if provided
+        if (onLoginSuccess) {
+          onLoginSuccess({
+            user: userData,
+            token: tokenData.data.token,
+            masterKey: storedMasterKey
+          });
+        }
+        
+        // Navigate to dashboard
+        navigate('/');
       } else {
-        const errorData = await loginResponse.json();
-        throw new Error(errorData.error || 'Biometric authentication failed');
+        throw new Error('Failed to authenticate with server');
       }
+      
     } catch (error) {
       console.error('Biometric authentication failed:', error);
-      setError('Biometric authentication failed. Please use your master key instead.');
+      
+      let errorMessage = 'Biometric authentication failed. Please use your master key instead.';
+      
+      if (error.name === 'NotAllowedError') {
+        errorMessage = 'Biometric authentication was cancelled or not allowed. Please try again and make sure to allow the browser to access your biometric data.';
+      } else if (error.name === 'NotSupportedError') {
+        errorMessage = 'Biometric authentication is not supported on this device or browser.';
+      } else if (error.name === 'SecurityError') {
+        errorMessage = 'Security error occurred. Please make sure you are using HTTPS or localhost.';
+      } else if (error.name === 'InvalidStateError') {
+        errorMessage = 'Biometric credential is invalid. Please set up biometric authentication again.';
+      } else if (error.message) {
+        errorMessage = error.message;
+      }
+      
+      toast.error(errorMessage);
+      setError(errorMessage);
     } finally {
       setIsLoading(false);
     }
@@ -412,6 +567,30 @@ const LoginMasterKey = ({ onLoginSuccess }) => {
                   <Fingerprint className="w-4 h-4" />
                   Unlock with Biometrics
                 </button>
+                
+              </>
+            )}
+
+            {/* Biometric Setup Notice */}
+            {biometricSupported && !biometricEnabled && (
+              <>
+                <div className="relative">
+                  <div className="absolute inset-0 flex items-center">
+                    <span className="w-full border-t border-secondary-200" />
+                  </div>
+                  <div className="relative flex justify-center text-sm">
+                    <span className="px-2 bg-white text-secondary-500">Or</span>
+                  </div>
+                </div>
+                
+                <div className="text-center p-3 bg-info-50 border border-info-200 rounded-lg">
+                  <p className="text-sm text-info-700">
+                    Biometric authentication is available but not enabled.
+                  </p>
+                  <p className="text-xs text-info-600 mt-1">
+                    Enable it in Settings after logging in.
+                  </p>
+                </div>
                 
               </>
             )}

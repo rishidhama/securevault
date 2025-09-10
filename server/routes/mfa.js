@@ -3,8 +3,14 @@ const { body, validationResult } = require('express-validator');
 const speakeasy = require('speakeasy');
 const QRCode = require('qrcode');
 const User = require('../models/User');
+const mongoose = require('mongoose');
 const { authenticateToken } = require('./auth');
 const router = express.Router();
+
+// Check if MongoDB is connected
+const isMongoConnected = () => {
+  return mongoose.connection.readyState === 1;
+};
 
 // Generate backup codes
 const generateBackupCodes = (count = 8) => {
@@ -359,6 +365,14 @@ router.get('/can-use-backup-codes', authenticateToken, async (req, res) => {
 // Get MFA status
 router.get('/status', authenticateToken, async (req, res) => {
   try {
+    // Check if MongoDB is connected
+    if (!isMongoConnected()) {
+      return res.status(503).json({
+        success: false,
+        error: 'Database not available. Please try again later.'
+      });
+    }
+
     const user = await User.findById(req.user.userId).select('+mfaSecret');
     
     if (!user) {

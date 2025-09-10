@@ -1,3 +1,43 @@
+## Integrity Anchoring (Tamper-Evident Logs)
+
+This app now supports a minimal, privacy-safe integrity anchoring flow that helps detect server-side tampering without ever putting secrets on a blockchain.
+
+### What and why (plain English)
+- Your passwords are end‑to‑end encrypted; the server cannot read them. However, a compromised server could still delete or reorder encrypted items, hide security events, or restore from an "old" backup.
+- To deter this, we create a short fingerprint (hash) of batches of safe metadata (IDs + timestamps) and store only that fingerprint’s Merkle root. Optionally, that root can be published to a public blockchain. Later, we can prove the server did not silently alter history.
+
+### What gets anchored
+- Only safe data: event summaries like userId, action (CREATE/UPDATE/DELETE), resourceType, resourceId, and timestamp.
+- Never secrets, never encrypted blobs.
+
+### How it works
+1. Each credential CRUD event enqueues a small, safe audit record.
+2. Periodically (or on demand), the server computes a Merkle root of the queued records and persists an `AuditAnchor` document containing:
+   - `merkleRoot`, `batchSize`, `anchorTime`, `previousAnchor`
+3. Optionally, you can take that Merkle root and publish it on a public chain. The README keeps it off-chain by default (free). You can later extend this to post on Sepolia/Polygon.
+
+### API
+- GET `/api/integrity/status` (auth required): returns current anchor status and last persisted anchor.
+- POST `/api/integrity/anchor` (auth required): forces an anchor of the current batch and stores it in `AuditAnchor`.
+
+### Verifying integrity (concept)
+- Given the event batch and the stored Merkle root, you can recompute the root. If recomputed root matches the stored one, the server didn’t tamper with those events.
+- If you publish the root on-chain, the on-chain timestamp also proves when the state existed.
+
+### What a user can do if tampering is detected
+- Detect and prove: If the current server state’s recomputed root doesn’t match the last anchored root, you can demonstrate evidence of manipulation.
+- Recover from trusted backups: Compare anchored roots across time, identify the last good state, and restore from backups matching those hashes.
+- Escalate with proof: Share the Merkle root, the event batch, and (optionally) the on-chain tx link to auditors or admins.
+
+### Enable/disable
+- Off-chain anchoring is enabled by default via the internal service. To disable, set `BLOCKCHAIN_ANCHOR_ENABLED=false` in `server/.env`.
+- Optional envs:
+  - `BLOCKCHAIN_ANCHOR_ENABLED=true|false`
+  - `BLOCKCHAIN_ANCHOR_INTERVAL=1000` (anchor every N events)
+
+### Optional: publish to a real blockchain later
+- Use a low-cost chain and post only the Merkle root periodically to keep costs tiny. For demos, use Sepolia (free faucets) with Alchemy/Infura.
+
 # 🔐 SecureVault - Smart Web-Based Password Manager
 
 A professional, full-stack password manager with **client-side AES encryption** built for your final-year project. SecureVault implements **Zero-Knowledge Architecture** where your master key never leaves your device.

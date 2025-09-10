@@ -136,6 +136,16 @@ const AddCredential = ({ onAddCredential, onUpdateCredential, categories, isEdit
     if (Object.keys(errs).length > 0) return;
     setIsLoading(true);
     
+    // Debug: Check if master key is available
+    const masterKey = localStorage.getItem('securevault_master_key');
+    console.log('Master key available:', !!masterKey, 'Length:', masterKey ? masterKey.length : 0);
+    
+    if (!masterKey) {
+      toast.error('Master key not found. Please log in again.');
+      setIsLoading(false);
+      return;
+    }
+    
     try {
       if (isEdit && id) {
         let updateData = { ...formData };
@@ -143,7 +153,7 @@ const AddCredential = ({ onAddCredential, onUpdateCredential, categories, isEdit
           // Encrypt new password
           const encryptedData = encryptionService.encryptPassword(
             formData.password,
-            localStorage.getItem('securevault_master_key')
+            masterKey
           );
           updateData.encryptedPassword = encryptedData.encryptedPassword;
           updateData.iv = encryptedData.iv;
@@ -158,7 +168,19 @@ const AddCredential = ({ onAddCredential, onUpdateCredential, categories, isEdit
         await onUpdateCredential(id, updateData);
         toast.success('Credential updated successfully!');
       } else {
-        await onAddCredential(formData);
+        // Encrypt password for new credential
+        let createData = { ...formData };
+        if (formData.password) {
+          const encryptedData = encryptionService.encryptPassword(
+            formData.password,
+            masterKey
+          );
+          createData.encryptedPassword = encryptedData.encryptedPassword;
+          createData.iv = encryptedData.iv;
+          createData.salt = encryptedData.salt;
+        }
+        delete createData.password; // Don't send plain password
+        await onAddCredential(createData);
         toast.success('Credential added successfully!');
       }
       navigate('/');

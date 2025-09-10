@@ -263,7 +263,8 @@ router.post('/biometric-challenge', [
     if (!user.biometricEnabled) {
       return res.status(400).json({
         success: false,
-        error: 'Biometric authentication is not enabled for this account'
+        error: 'Biometric authentication is not enabled for this account',
+        biometricEnabled: false
       });
     }
 
@@ -363,7 +364,8 @@ router.post('/biometric-login', [
     if (!user.biometricEnabled) {
       return res.status(400).json({
         success: false,
-        error: 'Biometric authentication is not enabled for this account'
+        error: 'Biometric authentication is not enabled for this account',
+        biometricEnabled: false
       });
     }
 
@@ -517,9 +519,7 @@ router.get('/profile', authenticateToken, async (req, res) => {
     if (!isMongoConnected()) {
       return res.status(503).json({
         success: false,
-        error: 'Database not available',
-        message: 'MongoDB is not connected. Running in demo mode.',
-        demo: true
+        error: 'Database not available. Please try again later.'
       });
     }
 
@@ -541,7 +541,8 @@ router.get('/profile', authenticateToken, async (req, res) => {
           name: user.name,
           mfaEnabled: user.mfaEnabled,
           lastLogin: user.lastLogin,
-          createdAt: user.createdAt
+          createdAt: user.createdAt,
+          preferences: user.preferences || undefined
         }
       }
     });
@@ -551,6 +552,41 @@ router.get('/profile', authenticateToken, async (req, res) => {
       success: false,
       error: 'Failed to fetch profile'
     });
+  }
+});
+
+// Get user preferences
+router.get('/preferences', authenticateToken, async (req, res) => {
+  try {
+    // Check if MongoDB is connected
+    if (!isMongoConnected()) {
+      return res.status(503).json({
+        success: false,
+        error: 'Database not available. Please try again later.'
+      });
+    }
+
+    const user = await User.findById(req.user.userId).select('preferences');
+    if (!user) return res.status(404).json({ success: false, error: 'User not found' });
+    return res.json({ success: true, data: user.preferences || {} });
+  } catch (e) {
+    return res.status(500).json({ success: false, error: 'Failed to load preferences' });
+  }
+});
+
+// Update user preferences
+router.put('/preferences', authenticateToken, async (req, res) => {
+  try {
+    const prefs = req.body || {};
+    const user = await User.findByIdAndUpdate(
+      req.user.userId,
+      { $set: { preferences: prefs } },
+      { new: true }
+    ).select('preferences');
+    if (!user) return res.status(404).json({ success: false, error: 'User not found' });
+    return res.json({ success: true, message: 'Preferences updated', data: user.preferences });
+  } catch (e) {
+    return res.status(500).json({ success: false, error: 'Failed to update preferences' });
   }
 });
 
@@ -944,8 +980,8 @@ router.delete('/delete-account', authenticateToken, async (req, res) => {
   }
 });
 
-// Test biometric endpoint (no database required)
-router.post('/test-biometric', [
+// Biometric authentication endpoint
+router.post('/biometric-auth', [
   body('email')
     .notEmpty()
     .withMessage('Email is required')
@@ -957,42 +993,70 @@ router.post('/test-biometric', [
     .withMessage('Biometric verification is required')
 ], async (req, res) => {
   try {
-    console.log('Test biometric endpoint called:', req.body);
+    console.log('Biometric authentication called:', req.body);
     
     const { email, biometricVerified } = req.body;
     
-    if (biometricVerified) {
-      // Simulate successful biometric authentication
-      const mockUser = {
-        id: 'test-user-id',
-        email: email,
-        name: 'Test User',
-        mfaEnabled: false
-      };
-      
-      // Generate a real JWT token for testing
-      const realToken = generateToken('test-user-id');
-      
-      res.json({
-        success: true,
-        message: 'Test biometric authentication successful',
-        data: {
-          user: mockUser,
-          token: realToken,
-          masterKey: ''
-        }
-      });
-    } else {
-      res.status(400).json({
+    if (!biometricVerified) {
+      return res.status(400).json({
         success: false,
         error: 'Biometric verification failed'
       });
     }
+
+    // Check if MongoDB is connected
+    if (!isMongoConnected()) {
+      return res.status(503).json({
+        success: false,
+        error: 'Database not available. Please try again later.'
+      });
+    }
+
+    // Find real user in database
+    const user = await User.findByEmail(email);
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        error: 'User not found. Please register first.'
+      });
+    }
+
+    // Check if biometric is enabled for this user
+    if (!user.biometricEnabled) {
+      return res.status(400).json({
+        success: false,
+        error: 'Biometric authentication is not enabled for this account'
+      });
+    }
+
+    // Generate JWT token with real user ID
+    const token = generateToken(user._id);
+    
+    // Update last login
+    user.lastLogin = new Date();
+    await user.save();
+    
+    res.json({
+      success: true,
+      message: 'Biometric authentication successful',
+      data: {
+        user: {
+          id: user._id,
+          email: user.email,
+          name: user.name,
+          mfaEnabled: user.mfaEnabled,
+          lastLogin: user.lastLogin,
+          createdAt: user.createdAt
+        },
+        token: token,
+        masterKey: '' // Master key is stored client-side only
+      }
+    });
   } catch (error) {
-    console.error('Test biometric error:', error);
+    console.error('Biometric authentication error:', error);
     res.status(500).json({
       success: false,
-      error: 'Test biometric authentication failed'
+      error: 'Biometric authentication failed'
     });
   }
 });
