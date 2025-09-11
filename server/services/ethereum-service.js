@@ -145,9 +145,27 @@ class EthereumService {
 
     try {
       console.log(`🔗 Storing vault hash for user ${userId} on Sepolia...`);
+      console.log(`📋 Transaction details:`, {
+        userId: userId,
+        userIdLength: userId.length,
+        vaultHash: vaultHash,
+        vaultHashLength: vaultHash.length,
+        vaultHashPreview: vaultHash.slice(0, 20) + '...'
+      });
+      
+      // Estimate gas first, then add buffer
+      let gasLimit;
+      try {
+        const estimatedGas = await this.contract.estimateGas.updateVaultHash(userId, vaultHash);
+        gasLimit = estimatedGas.mul(120).div(100); // Add 20% buffer
+        console.log(`📊 Estimated gas: ${estimatedGas.toString()}, Using: ${gasLimit.toString()}`);
+      } catch (error) {
+        console.log(`⚠️ Gas estimation failed, using default: ${error.message}`);
+        gasLimit = 300000; // Increased default gas limit
+      }
       
       const tx = await this.contract.updateVaultHash(userId, vaultHash, {
-        gasLimit: 150000
+        gasLimit: gasLimit
       });
       
       console.log(`📝 Transaction sent: ${tx.hash}`);
@@ -221,20 +239,18 @@ class EthereumService {
     if (!this.initialized) return [];
     
     try {
-      // Get recent blocks and check for events
-      const currentBlock = await this.provider.getBlockNumber();
-      const fromBlock = Math.max(0, currentBlock - 1000); // Last 1000 blocks
+      // For now, return empty array as blockchain event querying is complex
+      // In a production system, you'd want to implement proper event indexing
+      console.log(`📋 Transaction history requested for user: ${userId}`);
+      console.log('⚠️ Blockchain event querying not fully implemented - returning empty array');
       
-      const filter = this.contract.filters.VaultUpdated(userId);
-      const events = await this.contract.queryFilter(filter, fromBlock, currentBlock);
+      // TODO: Implement proper blockchain event querying
+      // This would require:
+      // 1. Event indexing service
+      // 2. Database storage of events
+      // 3. Proper event filtering by userId
       
-      return events.map(event => ({
-        txHash: event.transactionHash,
-        blockNumber: event.blockNumber,
-        userId: event.args.userId,
-        vaultHash: event.args.vaultHash,
-        timestamp: event.args.timestamp.toNumber()
-      }));
+      return [];
       
     } catch (error) {
       console.error('❌ Failed to get transaction history:', error.message);

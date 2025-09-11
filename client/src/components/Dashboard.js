@@ -36,7 +36,8 @@ const Dashboard = ({
   selectedCategory,
   setSelectedCategory,
   showFavorites,
-  setShowFavorites
+  setShowFavorites,
+  user
 }) => {
   const [showPasswords, setShowPasswords] = useState({});
   const [showFilters, setShowFilters] = useState(false);
@@ -184,6 +185,7 @@ const Dashboard = ({
             </div>
           </div>
         </div>
+
 
         {/* Search and Filters */}
         <div className="card">

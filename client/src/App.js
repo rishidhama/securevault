@@ -237,21 +237,28 @@ function App() {
 
   const handleAddCredential = async (credentialData) => {
     try {
-      // Encrypt the password client-side
-      const encryptedData = encryptionService.encryptPassword(
-        credentialData.password,
-        masterKey
-      );
+      let newCredential = { ...credentialData };
 
-      const newCredential = {
-        ...credentialData,
-        encryptedPassword: encryptedData.encryptedPassword,
-        iv: encryptedData.iv,
-        salt: encryptedData.salt
-      };
+      // Only encrypt if password is present and not already encrypted
+      if (credentialData.password && !credentialData.encryptedPassword) {
+        const encryptedData = encryptionService.encryptPassword(
+          credentialData.password,
+          masterKey
+        );
 
-      // Remove plain text password before sending to server
-      delete newCredential.password;
+        newCredential = {
+          ...credentialData,
+          encryptedPassword: encryptedData.encryptedPassword,
+          iv: encryptedData.iv,
+          salt: encryptedData.salt
+        };
+
+        // Remove plain text password before sending to server
+        delete newCredential.password;
+      } else if (credentialData.password) {
+        // Remove plain text password if it exists
+        delete newCredential.password;
+      }
 
       const response = await credentialsAPI.createCredential(newCredential);
       
@@ -371,6 +378,7 @@ function App() {
                   searchTerm={searchTerm}
                   setSearchTerm={setSearchTerm}
                   selectedCategory={selectedCategory}
+                  user={user}
                   setSelectedCategory={setSelectedCategory}
                   showFavorites={showFavorites}
                   setShowFavorites={setShowFavorites}

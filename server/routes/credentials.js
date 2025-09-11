@@ -5,6 +5,7 @@ const router = express.Router();
 
 const { authenticateToken } = require('./auth');
 const ethereumService = require('../services/ethereum-service');
+const blockchainDecoder = require('../services/blockchain-decoder-persistent');
 
 // Helper function to create blockchain event (non-blocking)
 const createBlockchainEvent = async (userId, action, credentialId, credentialData = null) => {
@@ -25,10 +26,50 @@ const createBlockchainEvent = async (userId, action, credentialId, credentialDat
       })
     };
 
-    const result = await ethereumService.storeVaultHash(userId, vaultData);
+    console.log(`🔍 Creating blockchain event for ${action} credential ${credentialId}:`, {
+      userId,
+      vaultData,
+      credentialData: credentialData ? {
+        title: credentialData.title,
+        category: credentialData.category,
+        hasUrl: !!credentialData.url
+      } : null
+    });
+
+    // Generate SHA-256 hash of the vault data
+    const crypto = require('crypto');
+    const vaultHash = crypto.createHash('sha256')
+      .update(JSON.stringify(vaultData))
+      .digest('hex');
+
+    // Validate that we have a proper hash
+    if (!vaultHash || vaultHash.length === 0) {
+      throw new Error('Generated vault hash is empty');
+    }
+
+    const result = await ethereumService.storeVaultHash(userId, vaultHash);
+    
+    // Store operation details for later decoding
+    if (result.success && result.txHash) {
+      await blockchainDecoder.storeOperationDetails(result.txHash, {
+        userId,
+        action,
+        credentialId,
+        vaultData,
+        vaultHash,
+        blockNumber: result.blockNumber,
+        credentialData: credentialData ? {
+          title: credentialData.title,
+          category: credentialData.category,
+          hasUrl: !!credentialData.url
+        } : null
+      });
+    }
+    
     console.log(`🔗 Blockchain event logged: ${action} credential ${credentialId} for user ${userId}`, {
       txHash: result.txHash,
-      etherscanUrl: result.etherscanUrl
+      etherscanUrl: result.etherscanUrl,
+      vaultHash: vaultHash
     });
   } catch (error) {
     console.error(`⚠️ Blockchain event failed for ${action} credential ${credentialId}:`, error.message);

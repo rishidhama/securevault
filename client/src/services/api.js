@@ -192,6 +192,7 @@ export const blockchainAPI = {
   }),
   getVault: (userId) => apiRequest(`/api/blockchain/vault/${encodeURIComponent(userId)}`),
   history: (userId) => apiRequest(`/api/blockchain/history/${encodeURIComponent(userId)}`),
+  activity: (userId) => apiRequest(`/api/blockchain/activity/${encodeURIComponent(userId)}`),
   verify: (userId, vaultData) => apiRequest('/api/blockchain/verify', {
     method: 'POST',
     body: JSON.stringify({ userId, vaultData })

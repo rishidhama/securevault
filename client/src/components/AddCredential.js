@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { 
   ArrowLeft, 
@@ -12,11 +12,14 @@ import {
   Lock,
   Globe,
   FileText,
-  Zap
+  Zap,
+  Activity,
+  CheckCircle,
+  XCircle
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import encryptionService from '../utils/encryption';
-import { credentialsAPI } from '../services/api';
+import { credentialsAPI, blockchainAPI } from '../services/api';
 import { checkPasswordBreach } from '../utils/encryption';
 
 const AddCredential = ({ onAddCredential, onUpdateCredential, categories, isEdit, credentials }) => {
@@ -25,6 +28,8 @@ const AddCredential = ({ onAddCredential, onUpdateCredential, categories, isEdit
   const [isLoading, setIsLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [showGenerator, setShowGenerator] = useState(false);
+  const [blockchainStatus, setBlockchainStatus] = useState(null);
+  const [blockchainLoading, setBlockchainLoading] = useState(true);
   
   const [formData, setFormData] = useState({
     title: '',
@@ -56,6 +61,34 @@ const AddCredential = ({ onAddCredential, onUpdateCredential, categories, isEdit
   const [errors, setErrors] = useState({});
   const [copied, setCopied] = useState(false);
   const [breachCount, setBreachCount] = useState(null);
+
+  // Fetch blockchain status
+  useEffect(() => {
+    const fetchBlockchainStatus = async () => {
+      try {
+        setBlockchainLoading(true);
+        
+        // Check if user is authenticated
+        const token = localStorage.getItem('securevault_token');
+        if (!token) {
+          console.log('User not authenticated, skipping blockchain status fetch');
+          setBlockchainStatus(null);
+          setBlockchainLoading(false);
+          return;
+        }
+        
+        const status = await blockchainAPI.status();
+        setBlockchainStatus(status.ethereum);
+      } catch (error) {
+        console.log('Blockchain status not available');
+        setBlockchainStatus(null);
+      } finally {
+        setBlockchainLoading(false);
+      }
+    };
+
+    fetchBlockchainStatus();
+  }, []);
 
   // Prefill form if editing
   React.useEffect(() => {
@@ -125,7 +158,9 @@ const AddCredential = ({ onAddCredential, onUpdateCredential, categories, isEdit
     const errs = {};
     if (!formData.title.trim()) errs.title = 'Title is required';
     if (!formData.username.trim()) errs.username = 'Username is required';
-    if (!isEdit && !formData.password.trim()) errs.password = 'Password is required';
+    if (!isEdit && (!formData.password || !formData.password.trim())) {
+      errs.password = 'Password is required';
+    }
     return errs;
   };
 
@@ -149,7 +184,7 @@ const AddCredential = ({ onAddCredential, onUpdateCredential, categories, isEdit
     try {
       if (isEdit && id) {
         let updateData = { ...formData };
-        if (formData.password) {
+        if (formData.password && formData.password.trim()) {
           // Encrypt new password
           const encryptedData = encryptionService.encryptPassword(
             formData.password,
@@ -166,11 +201,17 @@ const AddCredential = ({ onAddCredential, onUpdateCredential, categories, isEdit
         }
         delete updateData.password; // Don't send plain password
         await onUpdateCredential(id, updateData);
-        toast.success('Credential updated successfully!');
+        
+        // Show blockchain status in success message
+        if (blockchainStatus?.initialized) {
+          toast.success('Credential updated successfully! 🔗 Blockchain transaction recorded');
+        } else {
+          toast.success('Credential updated successfully!');
+        }
       } else {
         // Encrypt password for new credential
         let createData = { ...formData };
-        if (formData.password) {
+        if (formData.password && formData.password.trim()) {
           const encryptedData = encryptionService.encryptPassword(
             formData.password,
             masterKey
@@ -178,10 +219,18 @@ const AddCredential = ({ onAddCredential, onUpdateCredential, categories, isEdit
           createData.encryptedPassword = encryptedData.encryptedPassword;
           createData.iv = encryptedData.iv;
           createData.salt = encryptedData.salt;
+        } else {
+          throw new Error('Password is required for new credentials');
         }
         delete createData.password; // Don't send plain password
         await onAddCredential(createData);
-        toast.success('Credential added successfully!');
+        
+        // Show blockchain status in success message
+        if (blockchainStatus?.initialized) {
+          toast.success('Credential added successfully! 🔗 Blockchain transaction recorded');
+        } else {
+          toast.success('Credential added successfully!');
+        }
       }
       navigate('/');
     } catch (error) {
@@ -243,6 +292,22 @@ const AddCredential = ({ onAddCredential, onUpdateCredential, categories, isEdit
         <div>
           <h1 className="text-3xl font-bold text-gradient">Add Credential</h1>
           <p className="text-secondary-600">Securely store your login information</p>
+          {/* Blockchain Status Indicator */}
+          {!blockchainLoading && (
+            <div className="flex items-center gap-2 mt-2">
+              {blockchainStatus?.initialized ? (
+                <div className="flex items-center gap-1 text-xs text-green-600">
+                  <CheckCircle className="w-3 h-3" />
+                  <span>Blockchain Active</span>
+                </div>
+              ) : (
+                <div className="flex items-center gap-1 text-xs text-orange-600">
+                  <XCircle className="w-3 h-3" />
+                  <span>Blockchain Offline</span>
+                </div>
+              )}
+            </div>
+          )}
         </div>
       </div>
 

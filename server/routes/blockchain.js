@@ -2,13 +2,14 @@ const express = require('express');
 const router = express.Router();
 const { authenticateToken } = require('./auth');
 const ethereumService = require('../services/ethereum-service');
+const blockchainDecoder = require('../services/blockchain-decoder-persistent');
 const crypto = require('crypto');
 
 // Initialize Ethereum service
 ethereumService.init().catch(console.error);
 
 // GET blockchain status and network info
-router.get('/status', authenticateToken, async (req, res) => {
+router.get('/status', async (req, res) => {
   try {
     const networkInfo = await ethereumService.getNetworkInfo();
     
@@ -113,14 +114,54 @@ router.get('/history/:userId', authenticateToken, async (req, res) => {
   try {
     const { userId } = req.params;
     
-    const history = await ethereumService.getTransactionHistory(userId);
+    // Get transaction history from database
+    const history = await blockchainDecoder.getUserTransactionHistory(userId);
     
     res.json({
       success: true,
       data: history.map(tx => ({
-        ...tx,
+        txHash: tx.txHash,
+        timestamp: tx.timestamp,
+        blockNumber: tx.blockNumber || 0,
         etherscanUrl: `https://sepolia.etherscan.io/tx/${tx.txHash}`
       }))
+    });
+    
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+// GET detailed blockchain activity for a user
+router.get('/activity/:userId', authenticateToken, async (req, res) => {
+  try {
+    const { userId } = req.params;
+    
+    // Get transaction history from database
+    const history = await blockchainDecoder.getUserTransactionHistory(userId);
+    
+    // Enhance with operation details
+    const enhancedActivities = history.map(tx => {
+      return {
+        txHash: tx.txHash,
+        timestamp: tx.timestamp,
+        blockNumber: tx.blockNumber || 0,
+        action: tx.action,
+        credentialId: tx.credentialId,
+        title: tx.credentialData?.title || 'Unknown',
+        category: tx.credentialData?.category || 'Unknown',
+        hasUrl: tx.credentialData?.hasUrl || false,
+        etherscanUrl: `https://sepolia.etherscan.io/tx/${tx.txHash}`,
+        vaultHash: tx.vaultHash
+      };
+    });
+    
+    res.json({
+      success: true,
+      data: enhancedActivities
     });
     
   } catch (error) {

@@ -27,9 +27,9 @@ import {
 import { toast } from 'react-hot-toast';
 import BiometricAuth from './BiometricAuth';
 import BackupCodesManager from './BackupCodesManager';
+import BlockchainMonitor from './BlockchainMonitor';
+import BlockchainActivityLog from './BlockchainActivityLog';
 import { authAPI, mfaAPI, billingAPI } from '../services/api';
-import IntegrityPanel from './IntegrityPanel';
-import BlockchainStatus from './BlockchainStatus';
 
 const SettingsPage = ({ user, masterKey, onLogout, credentials, decryptPassword }) => {
   console.log('SettingsPage rendered with props:', {
@@ -297,6 +297,12 @@ const SettingsPage = ({ user, masterKey, onLogout, credentials, decryptPassword 
       name: 'Security',
       icon: <Shield className="w-4 h-4" />,
       description: 'Master key, biometric auth and backup codes'
+    },
+    {
+      id: 'blockchain',
+      name: 'Blockchain',
+      icon: <Activity className="w-4 h-4" />,
+      description: 'Blockchain security and activity monitoring'
     },
     {
       id: 'vault',
@@ -605,8 +611,6 @@ const SettingsPage = ({ user, masterKey, onLogout, credentials, decryptPassword 
               <p className="text-secondary-600">Manage your master key, biometric authentication, and backup codes</p>
             </div>
             <div className="space-y-6">
-              <BlockchainStatus />
-              <IntegrityPanel />
               {/* Master Key and MFA Section */}
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div className="bg-secondary-50 p-4 rounded-lg">
@@ -1283,6 +1287,30 @@ const SettingsPage = ({ user, masterKey, onLogout, credentials, decryptPassword 
                   </div>
                 </div>
               </button>
+            </div>
+          </div>
+        );
+
+      case 'blockchain':
+        return (
+          <div className="p-6">
+            <div className="mb-6">
+              <h3 className="text-xl font-semibold text-secondary-900 mb-2">Blockchain Security</h3>
+              <p className="text-secondary-600">Monitor blockchain activity and security status</p>
+            </div>
+            
+            <div className="space-y-6">
+              {/* Blockchain Monitor */}
+              <div>
+                <h4 className="text-lg font-medium text-secondary-900 mb-4">Connection Status</h4>
+                <BlockchainMonitor userId={user?.userId || user?._id || user?.id} />
+              </div>
+              
+              {/* Blockchain Activity Log */}
+              <div>
+                <h4 className="text-lg font-medium text-secondary-900 mb-4">Activity History</h4>
+                <BlockchainActivityLog userId={user?.userId || user?._id || user?.id} />
+              </div>
             </div>
           </div>
         );
