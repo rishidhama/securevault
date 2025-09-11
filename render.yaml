@@ -1,0 +1,37 @@
+services:
+  - type: web
+    name: securevault-backend
+    env: node
+    plan: free
+    buildCommand: npm install
+    startCommand: npm start
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: MONGODB_URI
+        fromDatabase:
+          name: securevault-db
+          property: connectionString
+      - key: JWT_SECRET
+        generateValue: true
+      - key: ETHEREUM_ENABLED
+        value: true
+      - key: SEPOLIA_RPC_URL
+        value: https://sepolia.infura.io/v3/YOUR_INFURA_KEY
+      - key: WALLET_PRIVATE_KEY
+        value: YOUR_WALLET_PRIVATE_KEY
+      - key: CONTRACT_ADDRESS
+        value: YOUR_CONTRACT_ADDRESS
+
+  - type: web
+    name: securevault-frontend
+    env: static
+    buildCommand: cd client && npm install && npm run build
+    staticPublishPath: ./client/build
+    envVars:
+      - key: REACT_APP_API_URL
+        value: https://securevault-backend.onrender.com
+
+databases:
+  - name: securevault-db
+    plan: free
