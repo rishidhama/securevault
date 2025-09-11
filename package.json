@@ -11,7 +11,8 @@
     "install-all": "npm install && cd client && npm install",
     "start": "node server/index.js",
     "test:blockchain": "node test-sepolia.js",
-    "deploy:contract": "node scripts/deploy-sepolia.js"
+    "deploy:contract": "node scripts/deploy-sepolia.js",
+    "vercel-build": "cd client && npm run build"
   },
   "keywords": [
     "password-manager",
