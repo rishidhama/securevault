@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const { authenticateToken } = require('./auth');
+const mongoose = require('mongoose');
 const ethereumService = require('../services/ethereum-service');
 const blockchainDecoder = require('../services/blockchain-decoder-persistent');
 const crypto = require('crypto');
@@ -114,6 +115,11 @@ router.get('/history/:userId', authenticateToken, async (req, res) => {
   try {
     const { userId } = req.params;
     
+    // If MongoDB is not connected, return empty history gracefully
+    if (mongoose.connection.readyState !== 1) {
+      return res.json({ success: true, data: [] });
+    }
+    
     // Get transaction history from database
     const history = await blockchainDecoder.getUserTransactionHistory(userId);
     
@@ -139,6 +145,11 @@ router.get('/history/:userId', authenticateToken, async (req, res) => {
 router.get('/activity/:userId', authenticateToken, async (req, res) => {
   try {
     const { userId } = req.params;
+    
+    // If MongoDB is not connected, return empty activity gracefully
+    if (mongoose.connection.readyState !== 1) {
+      return res.json({ success: true, data: [] });
+    }
     
     // Get transaction history from database
     const history = await blockchainDecoder.getUserTransactionHistory(userId);

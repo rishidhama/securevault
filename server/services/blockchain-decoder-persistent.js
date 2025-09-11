@@ -38,20 +38,24 @@ class PersistentBlockchainDecoder {
         storedAt: new Date()
       };
 
-      // Store in database
-      const operation = new BlockchainOperation({
-        txHash,
-        userId: operationData.userId,
-        action: operationData.action,
-        credentialId: operationData.credentialId,
-        vaultData: operationData.vaultData,
-        vaultHash: operationData.vaultHash,
-        blockNumber: operationData.blockNumber,
-        credentialData: operationData.credentialData,
-        storedAt: new Date()
-      });
-
-      await operation.save();
+      // Store in database idempotently (avoid duplicate key errors on txHash)
+      await BlockchainOperation.findOneAndUpdate(
+        { txHash },
+        {
+          $setOnInsert: {
+            txHash,
+            userId: operationData.userId,
+            action: operationData.action,
+            credentialId: operationData.credentialId,
+            vaultData: operationData.vaultData,
+            vaultHash: operationData.vaultHash,
+            blockNumber: operationData.blockNumber,
+            credentialData: operationData.credentialData,
+            storedAt: new Date()
+          }
+        },
+        { upsert: true, new: false, setDefaultsOnInsert: true }
+      );
 
       // Also store in cache for quick access
       this.operationCache.set(txHash, operationWithTimestamp);
