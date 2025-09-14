@@ -97,7 +97,10 @@ const BackupCodesManager = ({ onClose, onCodesGenerated }) => {
     const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
     let result = '';
     for (let i = 0; i < 8; i++) {
-      result += chars.charAt(Math.floor(Math.random() * chars.length));
+      const crypto = window.crypto || window.msCrypto;
+      const array = new Uint32Array(1);
+      crypto.getRandomValues(array);
+      result += chars.charAt(array[0] % chars.length);
     }
     return result;
   };

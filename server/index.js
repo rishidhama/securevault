@@ -135,7 +135,6 @@ const connectDB = async () => {
   console.log('   2. Verify MONGODB_URI in .env file');
   console.log('   3. If using MongoDB Atlas:');
   console.log('      - Check if your IP is whitelisted');
-  console.log('      - Verify username/password');
   console.log('      - Ensure cluster is running');
   console.log('   4. If using local MongoDB:');
   console.log('      - Start MongoDB service');

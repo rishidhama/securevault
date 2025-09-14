@@ -59,7 +59,7 @@ const LoginMFA = ({ onLoginSuccess }) => {
       // Store authentication data
       localStorage.setItem('securevault_token', authData.token);
       localStorage.setItem('securevault_user', JSON.stringify(authData.user));
-      localStorage.setItem('securevault_master_key', authData.masterKey);
+      sessionStorage.setItem('securevault_master_key', authData.masterKey);
       
       // Clear temporary auth data
       localStorage.removeItem('temp_auth');

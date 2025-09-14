@@ -6,8 +6,11 @@ const mongoose = require('mongoose');
 const crypto = require('crypto');
 const router = express.Router();
 
-// JWT secret from environment
-const JWT_SECRET = process.env.JWT_SECRET || 'your-super-secret-jwt-key-change-in-production';
+// JWT secret from environment - required for security
+const JWT_SECRET = process.env.JWT_SECRET;
+if (!JWT_SECRET) {
+  throw new Error('JWT_SECRET environment variable is required for security');
+}
 
 // Fallback storage for non-database mode
 const fallbackUsers = new Map();
@@ -130,10 +133,11 @@ router.post('/register', validateRegistration, async (req, res) => {
       }
     });
   } catch (error) {
-    console.error('Registration error:', error);
+    console.error('Registration error:', error.message);
     res.status(500).json({
       success: false,
-      error: 'Failed to register user'
+      error: 'Failed to register user',
+      code: 'REGISTRATION_FAILED'
     });
   }
 });
@@ -210,17 +214,19 @@ router.post('/login', validateLogin, async (req, res) => {
         }
       });
     } catch (error) {
-      console.error('Login error:', error);
+      console.error('Login error:', error.message);
       res.status(500).json({
         success: false,
-        error: 'Database connection error. Please try again later.'
+        error: 'Database connection error. Please try again later.',
+        code: 'DATABASE_CONNECTION_ERROR'
       });
     }
   } catch (error) {
-    console.error('Login error:', error);
+    console.error('Login error:', error.message);
     res.status(500).json({
       success: false,
-      error: 'Failed to login'
+      error: 'Failed to login',
+      code: 'LOGIN_FAILED'
     });
   }
 });

@@ -48,10 +48,10 @@ const LoginMasterKey = ({ onLoginSuccess }) => {
     if (!emailFromState) return;
     
     try {
-      // First check localStorage for immediate response
-      const stored = localStorage.getItem(`biometric_enabled_${emailFromState}`);
-      const hasCredential = localStorage.getItem(`biometric_credential_${emailFromState}`);
-      const hasMasterKey = localStorage.getItem(`securevault_master_key`) || localStorage.getItem(`securevault_master_key_${emailFromState}`);
+      // First check sessionStorage for immediate response
+      const stored = sessionStorage.getItem(`biometric_enabled_${emailFromState}`);
+      const hasCredential = sessionStorage.getItem(`biometric_credential_${emailFromState}`);
+      const hasMasterKey = sessionStorage.getItem(`securevault_master_key`) || sessionStorage.getItem(`securevault_master_key_${emailFromState}`);
       
       // Check if biometric is properly set up locally
       if (stored === 'true' && hasCredential && hasMasterKey) {
@@ -105,7 +105,7 @@ const LoginMasterKey = ({ onLoginSuccess }) => {
       setError('');
 
       // Check if we have a master key stored
-      const masterKey = localStorage.getItem('securevault_master_key') || localStorage.getItem(`securevault_master_key_${emailFromState}`);
+      const masterKey = sessionStorage.getItem('securevault_master_key') || sessionStorage.getItem(`securevault_master_key_${emailFromState}`);
       if (!masterKey || masterKey.length < 8) {
         throw new Error('Master key is required to enable biometric authentication. Please log in with your master key first.');
       }
@@ -162,9 +162,9 @@ const LoginMasterKey = ({ onLoginSuccess }) => {
       };
 
       // Store credential data
-      localStorage.setItem(`biometric_credential_${emailFromState}`, JSON.stringify(credentialData));
-      localStorage.setItem(`biometric_enabled_${emailFromState}`, 'true');
-      localStorage.setItem(`securevault_master_key_${emailFromState}`, masterKey);
+      sessionStorage.setItem(`biometric_credential_${emailFromState}`, JSON.stringify(credentialData));
+      sessionStorage.setItem(`biometric_enabled_${emailFromState}`, 'true');
+      sessionStorage.setItem(`securevault_master_key_${emailFromState}`, masterKey);
 
       // Send credential to server for storage
       try {
@@ -185,7 +185,6 @@ const LoginMasterKey = ({ onLoginSuccess }) => {
         }
 
         const result = await response.json();
-        console.log('Server response:', result);
       } catch (serverError) {
         console.warn('Failed to store credential on server:', serverError);
         // Continue with local storage only - server storage optional
@@ -229,7 +228,7 @@ const LoginMasterKey = ({ onLoginSuccess }) => {
       setError('');
 
       // Get stored credential data
-      const storedCredential = localStorage.getItem(`biometric_credential_${emailFromState}`);
+      const storedCredential = sessionStorage.getItem(`biometric_credential_${emailFromState}`);
       if (!storedCredential) {
         throw new Error('No biometric credential found. Please set up biometric authentication first.');
       }
@@ -264,10 +263,9 @@ const LoginMasterKey = ({ onLoginSuccess }) => {
         throw new Error('Biometric verification failed - user may have cancelled');
       }
 
-      console.log('Biometric assertion successful:', assertion);
 
       // Get stored master key
-      let storedMasterKey = localStorage.getItem('securevault_master_key') || localStorage.getItem(`securevault_master_key_${emailFromState}`);
+      let storedMasterKey = sessionStorage.getItem('securevault_master_key') || sessionStorage.getItem(`securevault_master_key_${emailFromState}`);
       
       if (!storedMasterKey || storedMasterKey.length < 8) {
         throw new Error('No stored master key found. Please log in with your master key to re-setup biometrics.');
@@ -319,7 +317,7 @@ const LoginMasterKey = ({ onLoginSuccess }) => {
         // Store authentication data
         localStorage.setItem('securevault_token', tokenData.data.token);
         localStorage.setItem('securevault_user', JSON.stringify(userData));
-        localStorage.setItem('securevault_master_key', storedMasterKey);
+        sessionStorage.setItem('securevault_master_key', storedMasterKey);
         
         toast.success('Biometric authentication successful!');
         
@@ -365,9 +363,9 @@ const LoginMasterKey = ({ onLoginSuccess }) => {
   // Function to clear incomplete biometric data and allow re-setup
   const clearIncompleteBiometricData = () => {
     if (emailFromState) {
-      localStorage.removeItem(`biometric_enabled_${emailFromState}`);
-      localStorage.removeItem(`biometric_credential_${emailFromState}`);
-      localStorage.removeItem(`securevault_master_key_${emailFromState}`);
+      sessionStorage.removeItem(`biometric_enabled_${emailFromState}`);
+      sessionStorage.removeItem(`biometric_credential_${emailFromState}`);
+      sessionStorage.removeItem(`securevault_master_key_${emailFromState}`);
       setBiometricEnabled(false);
     }
   };
@@ -440,7 +438,7 @@ const LoginMasterKey = ({ onLoginSuccess }) => {
       // Store authentication data
       localStorage.setItem('securevault_token', authData.token);
       localStorage.setItem('securevault_user', JSON.stringify(authData.user));
-      localStorage.setItem('securevault_master_key', masterKey); // For client-side encryption
+      sessionStorage.setItem('securevault_master_key', masterKey); // For client-side encryption
       
       toast.success('Login successful!');
       

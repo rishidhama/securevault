@@ -14,8 +14,8 @@ SecureVault is a sophisticated password management system that prioritizes secur
 
 ### Key Features
 
-- **Client-Side AES-256-CBC Encryption** - All passwords encrypted before leaving your device
-- **Zero-Knowledge Architecture** - Master key never sent to server
+- **Client-Side AES-256-GCM Encryption** - All passwords encrypted with authenticated encryption before leaving your device
+- **Zero-Knowledge Architecture** - Master key never sent to server, stored only in sessionStorage
 - **Modern React UI** - Beautiful, responsive interface with TailwindCSS
 - **Mobile-First Design** - Works perfectly on all devices
 - **Advanced Search & Filtering** - Find credentials quickly
@@ -140,7 +140,7 @@ npm run install-all      # Install all dependencies
 
 ### Zero-Knowledge Architecture
 
-1. **Master Key**: Stored only in browser localStorage
+1. **Master Key**: Stored only in browser sessionStorage
 2. **Password Encryption**: Happens client-side before transmission
 3. **Server Storage**: Only encrypted data stored in database
 4. **Decryption**: Happens client-side using master key
@@ -264,9 +264,9 @@ npm start
 
 If you encounter "Decryption failed: Error: Failed to decrypt password. Check your master key" errors, this usually indicates one of the following issues:
 
-1. **Master key not properly stored**: The master key may not be saved correctly in localStorage
+1. **Master key not properly stored**: The master key may not be saved correctly in sessionStorage
 2. **Master key corrupted**: The stored master key may have been modified or corrupted
-3. **Browser storage cleared**: localStorage may have been cleared, removing the master key
+3. **Browser storage cleared**: sessionStorage may have been cleared, removing the master key
 
 #### Solutions:
 
@@ -344,7 +344,7 @@ Make sure your MongoDB instance is running and the connection string in `.env` i
 
 ### Cryptographic Implementation
 - **Key Derivation**: PBKDF2 with 310,000 iterations (OWASP compliant)
-- **Encryption Mode**: GCM provides both confidentiality and authenticity
+- **Encryption Mode**: AES-256-GCM provides both confidentiality and authenticity
 - **Salt Management**: Unique per-credential salts prevent rainbow table attacks
 - **Backward Compatibility**: Graceful handling of legacy CBC-encrypted data
 

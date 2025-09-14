@@ -96,10 +96,6 @@ const BreachMonitor = ({ credentials, decryptPassword, onUpdateCredential }) => 
 
     try {
       for (const cred of credentials) {
-        // Debug: Log credential structure if website is missing
-        if (!cred.website && !cred.url) {
-          console.warn('Credential missing website/url:', cred);
-        }
         
         const password = decryptPassword(cred.encryptedPassword, cred.iv, cred.salt);
         if (password) {
@@ -115,7 +111,7 @@ const BreachMonitor = ({ credentials, decryptPassword, onUpdateCredential }) => 
             const username = cred.username || cred.email || 'your account';
             
             newNotifications.push({
-              id: Date.now() + Math.random(),
+              id: Date.now() + crypto.getRandomValues(new Uint32Array(1))[0],
               type: 'breach',
               title: `Security Alert: ${websiteName}`,
               message: `The password for "${websiteName}" (${username}) has been found in ${breachCount} data breaches. Consider changing this password immediately.`,

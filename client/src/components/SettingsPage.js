@@ -74,7 +74,7 @@ const SettingsPage = ({ user, masterKey, onLogout, credentials, decryptPassword 
   // Check if biometric is enabled for this user
   useEffect(() => {
     if (user?.email) {
-      const stored = localStorage.getItem(`biometric_enabled_${user.email}`);
+      const stored = sessionStorage.getItem(`biometric_enabled_${user.email}`);
       setBiometricEnabled(stored === 'true');
     }
   }, [user?.email]);
@@ -727,8 +727,8 @@ const SettingsPage = ({ user, masterKey, onLogout, credentials, decryptPassword 
                               // Show confirmation dialog for disabling biometrics
                               if (window.confirm('Are you sure you want to disable biometric authentication? You will need to use your master key to log in.')) {
                                 const userEmail = user?.email || 'unknown';
-                                localStorage.removeItem(`biometric_enabled_${userEmail}`);
-                                localStorage.removeItem(`biometric_credential_${userEmail}`);
+                                sessionStorage.removeItem(`biometric_enabled_${userEmail}`);
+                                sessionStorage.removeItem(`biometric_credential_${userEmail}`);
                                 setBiometricEnabled(false);
                                 toast.success('Biometric authentication disabled');
                               }
@@ -1757,7 +1757,7 @@ const SettingsPage = ({ user, masterKey, onLogout, credentials, decryptPassword 
                 setBiometricEnabled(true);
                 // Store biometric status for this user
                 const userEmail = user?.email || 'unknown';
-                localStorage.setItem(`biometric_enabled_${userEmail}`, 'true');
+                sessionStorage.setItem(`biometric_enabled_${userEmail}`, 'true');
                 toast.success('Biometric authentication enabled!');
               }
               setShowBiometricModal(false);

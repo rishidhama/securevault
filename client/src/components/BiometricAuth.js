@@ -129,7 +129,6 @@ const BiometricAuth = ({ onAuthenticate, onCancel, isEnabled = false, masterKey 
         throw new Error('Failed to create biometric credential - user may have cancelled');
       }
 
-      console.log('Credential created successfully:', credential);
 
       // Store credential locally
       const credentialData = {
@@ -143,9 +142,9 @@ const BiometricAuth = ({ onAuthenticate, onCancel, isEnabled = false, masterKey 
       };
 
       // Store credential data
-      localStorage.setItem(`biometric_credential_${userEmail}`, JSON.stringify(credentialData));
-      localStorage.setItem(`biometric_enabled_${userEmail}`, 'true');
-      localStorage.setItem(`securevault_master_key_${userEmail}`, masterKey);
+      sessionStorage.setItem(`biometric_credential_${userEmail}`, JSON.stringify(credentialData));
+      sessionStorage.setItem(`biometric_enabled_${userEmail}`, 'true');
+      sessionStorage.setItem(`securevault_master_key_${userEmail}`, masterKey);
 
       // Send credential to server for storage
       try {
@@ -214,7 +213,7 @@ const BiometricAuth = ({ onAuthenticate, onCancel, isEnabled = false, masterKey 
         JSON.parse(localStorage.getItem('securevault_user')).email : 'user@securevault.com';
 
       // Get stored credential data
-      const storedCredential = localStorage.getItem(`biometric_credential_${userEmail}`);
+      const storedCredential = sessionStorage.getItem(`biometric_credential_${userEmail}`);
       if (!storedCredential) {
         throw new Error('No biometric credential found. Please set up biometric authentication first.');
       }
@@ -249,7 +248,6 @@ const BiometricAuth = ({ onAuthenticate, onCancel, isEnabled = false, masterKey 
         throw new Error('Biometric verification failed - user may have cancelled');
       }
 
-      console.log('Biometric assertion successful:', assertion);
       toast.success('Biometric verification successful!');
       onAuthenticate(true);
       

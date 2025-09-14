@@ -172,8 +172,7 @@ const AddCredential = ({ onAddCredential, onUpdateCredential, categories, isEdit
     setIsLoading(true);
     
     // Debug: Check if master key is available
-    const masterKey = localStorage.getItem('securevault_master_key');
-    console.log('Master key available:', !!masterKey, 'Length:', masterKey ? masterKey.length : 0);
+    const masterKey = sessionStorage.getItem('securevault_master_key');
     
     if (!masterKey) {
       toast.error('Master key not found. Please log in again.');

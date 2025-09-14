@@ -17,7 +17,8 @@ const generateBackupCodes = (count = 8) => {
   const codes = [];
   for (let i = 0; i < count; i++) {
     // Generate 8-character alphanumeric codes
-    const code = Math.random().toString(36).substring(2, 10).toUpperCase();
+    const crypto = require('crypto');
+    const code = crypto.randomBytes(4).toString('hex').toUpperCase();
     codes.push({ code, used: false });
   }
   return codes;

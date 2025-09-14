@@ -64,7 +64,6 @@ class VaultChain {
 
   async deployContract() {
     try {
-      console.log('Deploying PasswordVault contract to Sepolia...');
       
       // Simple contract for storing password vault hashes
       const contractSource = `

@@ -127,7 +127,7 @@ class VaultCrypt {
         tag: encrypted.ciphertext.toString(CryptoJS.enc.Base64).slice(-24) // Extract auth tag
       };
     } catch (error) {
-      console.error('Encryption error:', error);
+      console.error('Encryption error:', error.message);
       throw new Error(`Failed to encrypt password: ${error.message}`);
     }
   }
@@ -188,7 +188,7 @@ class VaultCrypt {
       
       return result;
     } catch (error) {
-      console.error('Decryption error:', error);
+      console.error('Decryption error:', error.message);
       
       // Provide more specific error messages
       if (error.message.includes('Master key is required')) {
@@ -246,8 +246,12 @@ class VaultCrypt {
     }
 
     let password = '';
+    const crypto = window.crypto || window.msCrypto;
+    
     for (let i = 0; i < length; i++) {
-      password += charset.charAt(Math.floor(Math.random() * charset.length));
+      const array = new Uint32Array(1);
+      crypto.getRandomValues(array);
+      password += charset.charAt(array[0] % charset.length);
     }
 
     return password;
@@ -336,7 +340,7 @@ async function checkPasswordBreach(password) {
     }
     return 0;
   } catch (e) {
-    console.error('HIBP breach check failed:', e);
+    console.error('HIBP breach check failed:', e.message);
     return 0;
   }
 }

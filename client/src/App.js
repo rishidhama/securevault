@@ -102,13 +102,8 @@ function App() {
     try {
       const token = localStorage.getItem('securevault_token');
       const storedUser = localStorage.getItem('securevault_user');
-      const storedMasterKey = localStorage.getItem('securevault_master_key');
+      const storedMasterKey = sessionStorage.getItem('securevault_master_key');
 
-      console.log('checkAuthStatus - localStorage data:', {
-        token: token ? 'Present' : 'Missing',
-        storedUser: storedUser ? 'Present' : 'Missing',
-        storedMasterKey: storedMasterKey ? 'Present' : 'Missing'
-      });
 
       if (token && storedUser && storedMasterKey) {
         // Verify token is still valid
@@ -138,7 +133,7 @@ function App() {
   const clearAuthData = () => {
     localStorage.removeItem('securevault_token');
     localStorage.removeItem('securevault_user');
-    localStorage.removeItem('securevault_master_key');
+    sessionStorage.removeItem('securevault_master_key');
     localStorage.removeItem('temp_auth');
     setUser(null);
     setMasterKey('');
@@ -178,17 +173,11 @@ function App() {
   };
 
   const handleLoginSuccess = async (authData) => {
-    console.log('handleLoginSuccess called with:', authData);
     
     setUser(authData.user);
     setMasterKey(authData.masterKey);
     setIsAuthenticated(true);
     
-    console.log('State after login:', {
-      user: authData.user,
-      masterKey: authData.masterKey,
-      isAuthenticated: true
-    });
     
     // Store token in localStorage for API calls
     if (authData.token) {
