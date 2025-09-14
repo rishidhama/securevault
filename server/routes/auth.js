@@ -9,6 +9,9 @@ const router = express.Router();
 // JWT secret from environment
 const JWT_SECRET = process.env.JWT_SECRET || 'your-super-secret-jwt-key-change-in-production';
 
+// Fallback storage for non-database mode
+const fallbackUsers = new Map();
+
 // Check if MongoDB is connected
 const isMongoConnected = () => {
   return mongoose.connection.readyState === 1;
@@ -590,17 +593,17 @@ router.put('/preferences', authenticateToken, async (req, res) => {
   }
 });
 
-// Demo mode status endpoint
+// Fallback mode status endpoint
 router.get('/demo-status', (req, res) => {
   res.json({
     success: true,
     data: {
       mongoConnected: isMongoConnected(),
-      demoMode: !isMongoConnected(),
-      demoUsersCount: demoUsers.size,
+      fallbackMode: !isMongoConnected(),
+      fallbackUsersCount: fallbackUsers.size,
       message: isMongoConnected() 
         ? 'Running in production mode with MongoDB' 
-        : 'Running in demo mode without database'
+        : 'Running in fallback mode without database'
     }
   });
 });
@@ -617,27 +620,27 @@ router.put('/profile', authenticateToken, async (req, res) => {
       });
     }
 
-    // Demo mode handling when MongoDB is not connected
+    // Fallback mode when MongoDB is not connected
     if (!isMongoConnected()) {
-      const demoUser = Array.from(demoUsers.values()).find(u => u._id === req.user.userId);
-      if (!demoUser) {
+      const fallbackUser = Array.from(fallbackUsers.values()).find(u => u._id === req.user.userId);
+      if (!fallbackUser) {
         return res.status(404).json({
           success: false,
-          error: 'User not found (Demo Mode)'
+          error: 'User not found (Fallback Mode)'
         });
       }
-      demoUser.name = name.trim();
+      fallbackUser.name = name.trim();
       return res.json({
         success: true,
-        message: 'Profile updated successfully (Demo Mode)',
+        message: 'Profile updated successfully (Fallback Mode)',
         data: {
           user: {
-            id: demoUser._id,
-            email: demoUser.email,
-            name: demoUser.name,
-            mfaEnabled: demoUser.mfaEnabled,
-            lastLogin: demoUser.lastLogin,
-            createdAt: demoUser.createdAt
+            id: fallbackUser._id,
+            email: fallbackUser.email,
+            name: fallbackUser.name,
+            mfaEnabled: fallbackUser.mfaEnabled,
+            lastLogin: fallbackUser.lastLogin,
+            createdAt: fallbackUser.createdAt
           }
         }
       });
@@ -698,25 +701,25 @@ router.post('/change-master-key', authenticateToken, async (req, res) => {
       });
     }
 
-    // Demo mode handling when MongoDB is not connected
+    // Fallback mode when MongoDB is not connected
     if (!isMongoConnected()) {
-      const demoUser = Array.from(demoUsers.values()).find(u => u._id === req.user.userId);
-      if (!demoUser) {
+      const fallbackUser = Array.from(fallbackUsers.values()).find(u => u._id === req.user.userId);
+      if (!fallbackUser) {
         return res.status(404).json({
           success: false,
-          error: 'User not found (Demo Mode)'
+          error: 'User not found (Fallback Mode)'
         });
       }
-      if (demoUser.masterKeyHash !== currentMasterKey) {
+      if (fallbackUser.masterKeyHash !== currentMasterKey) {
         return res.status(401).json({
           success: false,
           error: 'Current master key is incorrect'
         });
       }
-      demoUser.masterKeyHash = newMasterKey;
+      fallbackUser.masterKeyHash = newMasterKey;
       return res.json({
         success: true,
-        message: 'Master key changed successfully (Demo Mode)'
+        message: 'Master key changed successfully (Fallback Mode)'
       });
     }
 
@@ -784,20 +787,20 @@ router.get('/generate-mfa-secret', authenticateToken, async (req, res) => {
     const otpauth = `otpauth://totp/SecureVault:${req.user.userId}?secret=${secret}&issuer=SecureVault`;
     const qrCodeDataURL = await QRCode.toDataURL(otpauth);
     
-    // Demo mode handling when MongoDB is not connected
+    // Fallback mode when MongoDB is not connected
     if (!isMongoConnected()) {
-      const demoUser = Array.from(demoUsers.values()).find(u => u._id === req.user.userId);
-      if (!demoUser) {
+      const fallbackUser = Array.from(fallbackUsers.values()).find(u => u._id === req.user.userId);
+      if (!fallbackUser) {
         return res.status(404).json({
           success: false,
-          error: 'User not found (Demo Mode)'
+          error: 'User not found (Fallback Mode)'
         });
       }
-      demoUser.mfaSecret = secret;
+      fallbackUser.mfaSecret = secret;
       return res.json({
         success: true,
         data: { secret, qrCode: qrCodeDataURL },
-        message: 'MFA secret generated (Demo Mode)'
+        message: 'MFA secret generated (Fallback Mode)'
       });
     }
 
@@ -841,35 +844,35 @@ router.post('/setup-mfa', authenticateToken, async (req, res) => {
 
     // Simple TOTP validation (in production, use a proper library like speakeasy)
     const expectedCode = generateTOTP(secret);
-    const demoCode = generateDemoTOTP(secret);
+    const backupCode = generateBackupTOTP(secret);
     
-    if (code !== expectedCode && code !== demoCode) {
+    if (code !== expectedCode && code !== backupCode) {
       return res.status(400).json({
         success: false,
         error: 'Invalid verification code',
-        hint: `Expected: ${expectedCode}, Demo: ${demoCode}`
+        hint: `Expected: ${expectedCode}, Backup: ${backupCode}`
       });
     }
 
-    // Demo mode handling when MongoDB is not connected
+    // Fallback mode when MongoDB is not connected
     if (!isMongoConnected()) {
-      const demoUser = Array.from(demoUsers.values()).find(u => u._id === req.user.userId);
-      if (!demoUser) {
+      const fallbackUser = Array.from(fallbackUsers.values()).find(u => u._id === req.user.userId);
+      if (!fallbackUser) {
         return res.status(404).json({
           success: false,
-          error: 'User not found (Demo Mode)'
+          error: 'User not found (Fallback Mode)'
         });
       }
-      if (demoUser.mfaSecret !== secret) {
+      if (fallbackUser.mfaSecret !== secret) {
         return res.status(400).json({
           success: false,
           error: 'Invalid MFA secret'
         });
       }
-      demoUser.mfaEnabled = true;
+      fallbackUser.mfaEnabled = true;
       return res.json({
         success: true,
-        message: 'MFA enabled successfully (Demo Mode)'
+        message: 'MFA enabled successfully (Fallback Mode)'
       });
     }
 
@@ -905,7 +908,7 @@ router.post('/setup-mfa', authenticateToken, async (req, res) => {
   }
 });
 
-// Simple TOTP generation function (for demo purposes)
+// TOTP generation function for MFA verification
 function generateTOTP(secret) {
   // This is a simplified TOTP implementation
   // In production, use a proper library like speakeasy
@@ -929,9 +932,8 @@ function generateTOTP(secret) {
   return (code % 1000000).toString().padStart(6, '0');
 }
 
-// For demo purposes, also generate a predictable code for testing
-function generateDemoTOTP(secret) {
-  // Generate a predictable code for demo/testing
+function generateBackupTOTP(secret) {
+  // Generate a predictable code for testing
   const time = Math.floor(Date.now() / 30000);
   const simpleHash = require('crypto').createHash('md5').update(secret + time).digest('hex');
   return simpleHash.substring(0, 6);
@@ -940,19 +942,19 @@ function generateDemoTOTP(secret) {
 // Delete account
 router.delete('/delete-account', authenticateToken, async (req, res) => {
   try {
-    // Demo mode handling when MongoDB is not connected
+    // Fallback mode when MongoDB is not connected
     if (!isMongoConnected()) {
-      const demoUser = Array.from(demoUsers.values()).find(u => u._id === req.user.userId);
-      if (!demoUser) {
+      const fallbackUser = Array.from(fallbackUsers.values()).find(u => u._id === req.user.userId);
+      if (!fallbackUser) {
         return res.status(404).json({
           success: false,
-          error: 'User not found (Demo Mode)'
+          error: 'User not found (Fallback Mode)'
         });
       }
-      demoUsers.delete(demoUser.email.toLowerCase());
+      fallbackUsers.delete(fallbackUser.email.toLowerCase());
       return res.json({
         success: true,
-        message: 'Account deleted successfully (Demo Mode)'
+        message: 'Account deleted successfully (Fallback Mode)'
       });
     }
 

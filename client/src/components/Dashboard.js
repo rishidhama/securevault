@@ -318,7 +318,7 @@ const Dashboard = ({
                           }`}>
                             {showPasswords[credential._id] 
                               ? decryptPassword(credential.encryptedPassword, credential.iv, credential.salt)
-                              : '••••••••••••••••'
+                              : '----------------'
                             }
                           </span>
                           <button
@@ -385,7 +385,7 @@ const Dashboard = ({
                           <span>Created: {new Date(credential.createdAt).toLocaleDateString()}</span>
                           {credential.lastModified !== credential.createdAt && (
                             <>
-                              <span>•</span>
+                              <span>-</span>
                               <span>Modified: {new Date(credential.lastModified).toLocaleDateString()}</span>
                             </>
                           )}

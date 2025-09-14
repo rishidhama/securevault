@@ -158,7 +158,7 @@ const BackupCodesManager = ({ onClose, onCodesGenerated }) => {
               <p>Generated: ${new Date().toLocaleString()}</p>
             </div>
             <div class="warning">
-              <strong>⚠️ IMPORTANT:</strong> Keep these codes safe and secure. Each code can only be used once.
+              <strong>IMPORTANT:</strong> Keep these codes safe and secure. Each code can only be used once.
             </div>
             ${backupCodes.map(code => `<div class="code">${code.id}. ${code.code}</div>`).join('')}
           </body>
@@ -267,7 +267,7 @@ const BackupCodesManager = ({ onClose, onCodesGenerated }) => {
                     className="bg-white border border-gray-200 rounded-lg p-3 flex items-center justify-between"
                   >
                     <span className="font-mono text-lg font-semibold">
-                      {code.id}. ••••••••
+                      {code.id}. --------
                     </span>
                     {code.used && (
                       <CheckCircle className="w-4 h-4 text-green-500" />
@@ -319,9 +319,9 @@ const BackupCodesManager = ({ onClose, onCodesGenerated }) => {
           <Shield className="w-4 h-4 text-blue-600 mt-0.5" />
           <div className="text-sm text-blue-800">
             <p className="font-medium">Security Features:</p>
-            <p>• Codes are generated using cryptographically secure random numbers</p>
-            <p>• Each code is unique and can only be used once</p>
-            <p>• Codes are never stored in plain text on our servers</p>
+            <p>- Codes are generated using cryptographically secure random numbers</p>
+            <p>- Each code is unique and can only be used once</p>
+            <p>- Codes are never stored in plain text on our servers</p>
           </div>
         </div>
       </div>

@@ -353,7 +353,7 @@ const BreachMonitor = ({ credentials, decryptPassword, onUpdateCredential }) => 
                                           <div>
                        <div className="font-semibold text-gray-900 dark:text-gray-100">{credential.url || 'Unknown Website'}</div>
                        <div className="text-sm text-secondary-600 dark:text-gray-300">
-                         {(credential.username || credential.email) && `${credential.username || credential.email} • `}Found in {data.count} data breach{data.count !== 1 ? 'es' : ''}
+                         {(credential.username || credential.email) && `${credential.username || credential.email} - `}Found in {data.count} data breach{data.count !== 1 ? 'es' : ''}
                        </div>
                        <div className="text-xs text-red-600 dark:text-red-400 mt-1">
                          Last checked: {data.lastChecked.toLocaleString()}

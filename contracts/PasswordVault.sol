@@ -2,8 +2,15 @@
 pragma solidity ^0.8.20;
 
 /**
- * @title PasswordVault
- * @dev Stores per-user vault hashes on-chain for tamper-evidence. Optimized for Sepolia/testnets.
+ * @title VaultIntegrityAnchor
+ * @dev Tamper-evident storage for password vault integrity hashes.
+ * 
+ * Security model: Only stores Merkle roots of audit events, never plaintext
+ * or encrypted credentials. Provides cryptographic proof of data integrity
+ * without compromising user privacy.
+ * 
+ * Gas optimization: Uses string mapping for user IDs to reduce storage costs
+ * on testnets. Production deployment would use bytes32 for better efficiency.
  */
 contract PasswordVault {
     struct VaultHash {

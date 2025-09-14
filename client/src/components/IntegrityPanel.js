@@ -72,7 +72,7 @@ const IntegrityPanel = () => {
               <span className="text-secondary-700">Blockchain Status</span>
             </div>
             <div className="break-all text-[11px] text-secondary-700">Contract: {lastAnchor.contract}</div>
-            <div className="text-[11px] text-secondary-600">Network: {lastAnchor.network} • Balance: {lastAnchor.balance} ETH</div>
+            <div className="text-[11px] text-secondary-600">Network: {lastAnchor.network} - Balance: {lastAnchor.balance} ETH</div>
             {lastAnchor.contract && (
               <div className="mt-1">
                 <a

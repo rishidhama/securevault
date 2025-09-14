@@ -204,7 +204,7 @@ const AddCredential = ({ onAddCredential, onUpdateCredential, categories, isEdit
         
         // Show blockchain status in success message
         if (blockchainStatus?.initialized) {
-          toast.success('Credential updated successfully! 🔗 Blockchain transaction recorded');
+          toast.success('Credential updated successfully. Blockchain transaction recorded.');
         } else {
           toast.success('Credential updated successfully!');
         }
@@ -227,7 +227,7 @@ const AddCredential = ({ onAddCredential, onUpdateCredential, categories, isEdit
         
         // Show blockchain status in success message
         if (blockchainStatus?.initialized) {
-          toast.success('Credential added successfully! 🔗 Blockchain transaction recorded');
+          toast.success('Credential added successfully. Blockchain transaction recorded.');
         } else {
           toast.success('Credential added successfully!');
         }
@@ -365,7 +365,7 @@ const AddCredential = ({ onAddCredential, onUpdateCredential, categories, isEdit
                   name="url"
                   value={formData.url}
                   onChange={handleInputChange}
-                  placeholder="https://example.com"
+                  placeholder="https://app.service.com"
                   className="input pl-10"
                 />
               </div>
@@ -581,7 +581,7 @@ const AddCredential = ({ onAddCredential, onUpdateCredential, categories, isEdit
                 name="notes"
                 value={formData.notes}
                 onChange={handleInputChange}
-                placeholder="Add any additional notes or reminders..."
+                placeholder="Add security notes, recovery info, or usage context..."
                 rows="3"
                 className="input resize-none"
               />

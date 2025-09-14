@@ -157,9 +157,9 @@ function App() {
       setIsLoading(true);
       
       const [credentialsResponse, statsResponse, categoriesResponse] = await Promise.all([
-        credentialsAPI.getCredentials(),
-        credentialsAPI.getStats(),
-        credentialsAPI.getCategories()
+        credentialsAPI.list(),
+        credentialsAPI.stats(),
+        credentialsAPI.categories()
       ]);
 
       // Handle the response structure correctly
@@ -260,7 +260,7 @@ function App() {
         delete newCredential.password;
       }
 
-      const response = await credentialsAPI.createCredential(newCredential);
+      const response = await credentialsAPI.create(newCredential);
       
       // Add the new credential to the list
       const newCredentialData = response.data || response;
@@ -275,7 +275,7 @@ function App() {
 
   const handleDeleteCredential = async (id) => {
     try {
-      await credentialsAPI.deleteCredential(id);
+      await credentialsAPI.remove(id);
       setCredentials(prev => prev.filter(cred => cred._id !== id));
       setStats(prev => ({ ...prev, total: prev.total - 1 }));
     } catch (error) {
@@ -304,7 +304,7 @@ function App() {
 
   const handleUpdateCredential = async (id, updates) => {
     try {
-      const response = await credentialsAPI.updateCredential(id, updates);
+      const response = await credentialsAPI.update(id, updates);
       setCredentials(prev => 
         prev.map(cred => 
           cred._id === id 

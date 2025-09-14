@@ -148,9 +148,9 @@ const MasterKeyModal = ({ isOpen, onClose, onSubmit, isError = false, errorMessa
           <div className="text-xs text-secondary-500 bg-secondary-50 p-3 rounded-lg">
             <p className="font-medium mb-1">Security Notice:</p>
             <ul className="space-y-1">
-              <li>• Your master key is never stored on our servers</li>
-              <li>• It's used only for client-side encryption/decryption</li>
-              <li>• Make sure to remember it - we cannot recover it</li>
+              <li>- Your master key is never stored on our servers</li>
+              <li>- It's used only for client-side encryption/decryption</li>
+              <li>- Make sure to remember it - we cannot recover it</li>
             </ul>
           </div>
 

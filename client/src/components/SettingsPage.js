@@ -619,7 +619,7 @@ const SettingsPage = ({ user, masterKey, onLogout, credentials, decryptPassword 
                     <label className="text-sm font-medium text-secondary-700">Master Key</label>
                   </div>
                   <p className={`text-sm font-medium ${masterKey ? 'text-success-600' : 'text-danger-600'}`}>
-                    {masterKey ? '✅ Configured' : '❌ Not configured'}
+                    {masterKey ? 'Configured' : 'Not configured'}
                   </p>
                 </div>
                 <div className="bg-secondary-50 p-4 rounded-lg">
@@ -628,7 +628,7 @@ const SettingsPage = ({ user, masterKey, onLogout, credentials, decryptPassword 
                     <label className="text-sm font-medium text-secondary-700">Two-Factor Auth</label>
                   </div>
                   <p className={`text-sm font-medium ${user?.mfaEnabled ? 'text-success-600' : 'text-warning-600'}`}>
-                    {user?.mfaEnabled ? '✅ Enabled' : '⚠️ Disabled'}
+                    {user?.mfaEnabled ? 'Enabled' : 'Disabled'}
                   </p>
                 </div>
                 <div className="bg-secondary-50 p-4 rounded-lg">
@@ -701,7 +701,7 @@ const SettingsPage = ({ user, masterKey, onLogout, credentials, decryptPassword 
                               ? 'bg-green-100 text-green-700 dark:bg-green-900/20 dark:text-green-400' 
                               : 'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-400'
                           }`}>
-                            {biometricEnabled ? '✅ Enabled' : '⚠️ Not Setup'}
+                            {biometricEnabled ? 'Enabled' : 'Not Setup'}
                           </span>
                         </div>
                         <p className="text-xs text-secondary-500">
@@ -779,7 +779,7 @@ const SettingsPage = ({ user, masterKey, onLogout, credentials, decryptPassword 
                               ? 'bg-green-100 text-green-700 dark:bg-green-900/20 dark:text-green-400' 
                               : 'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-400'
                           }`}>
-                            {backupCodes.length > 0 ? '✅ Generated' : '⚠️ Not Generated'}
+                            {backupCodes.length > 0 ? 'Generated' : 'Not Generated'}
                           </span>
                         </div>
                         <p className="text-xs text-secondary-500">
@@ -859,7 +859,7 @@ const SettingsPage = ({ user, masterKey, onLogout, credentials, decryptPassword 
               </div>
               <div className="bg-primary-50 p-4 rounded-lg">
                 <p className="text-sm text-primary-700">
-                  💡 Export your vault as a JSON file for backup purposes. Keep your backup file secure!
+                  Export your vault as a JSON file for backup purposes. Keep your backup file secure.
                 </p>
               </div>
             </div>
@@ -1020,9 +1020,9 @@ const SettingsPage = ({ user, masterKey, onLogout, credentials, decryptPassword 
                   <div className="flex items-center gap-2">
                     <div className="w-3 h-3 bg-primary-600 rounded-full"></div>
                     <span className="text-sm text-secondary-500">Theme: {theme}</span>
-                    <span className="text-sm text-secondary-500">•</span>
+                    <span className="text-sm text-secondary-500">-</span>
                     <span className="text-sm text-secondary-500">Font: {fontSize}</span>
-                    <span className="text-sm text-secondary-500">•</span>
+                    <span className="text-sm text-secondary-500">-</span>
                     <span className="text-sm text-secondary-500">Compact: {compactMode ? 'On' : 'Off'}</span>
                   </div>
                 </div>
@@ -1185,7 +1185,7 @@ const SettingsPage = ({ user, masterKey, onLogout, credentials, decryptPassword 
                   <div className="flex items-center gap-3 min-w-0">
                     <CreditCard className="w-5 h-5 text-secondary-600 dark:text-gray-300 flex-shrink-0" />
                     <div className="min-w-0">
-                      <div className="font-medium text-secondary-900 dark:text-white truncate">Visa •••• 4242</div>
+                      <div className="font-medium text-secondary-900 dark:text-white truncate">Visa ---- 4242</div>
                       <div className="text-sm text-secondary-600 dark:text-gray-300 truncate">Expires 12/27</div>
                     </div>
                   </div>
@@ -1562,7 +1562,7 @@ const SettingsPage = ({ user, masterKey, onLogout, credentials, decryptPassword 
                               ))}
                             </div>
                             <p className="text-xs text-warning-600 dark:text-warning-400 mt-2">
-                              ⚠️ Each code can only be used once
+                              Each code can only be used once
                             </p>
                           </div>
                         )}
@@ -1713,7 +1713,7 @@ const SettingsPage = ({ user, masterKey, onLogout, credentials, decryptPassword 
               <>
                 <div className="bg-warning-50 p-4 rounded-lg border border-warning-200 mb-6">
                   <h4 className="text-sm font-medium text-warning-800 mb-2">
-                    🔑 New Backup Codes Generated
+                    New Backup Codes Generated
                   </h4>
                   <p className="text-xs text-warning-700 mb-3">
                     Your old backup codes are now invalid. Save these new codes securely!
@@ -1726,7 +1726,7 @@ const SettingsPage = ({ user, masterKey, onLogout, credentials, decryptPassword 
                     ))}
                   </div>
                   <p className="text-xs text-warning-600 mt-2">
-                    ⚠️ Each code can only be used once. Store them in a safe place!
+                    Each code can only be used once. Store them in a safe place.
                   </p>
                 </div>
                 

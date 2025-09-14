@@ -242,7 +242,7 @@ const LoginMFA = ({ onLoginSuccess }) => {
                   className="text-sm text-secondary-600 hover:underline"
                   disabled={isLoading}
                 >
-                  ← Back to authenticator code
+                  Back to authenticator code
                 </button>
               </div>
             </form>

@@ -1,46 +1,6 @@
-## Integrity Anchoring (Tamper-Evident Logs)
+# SecureVault - Zero-Knowledge Password Manager
 
-This app now supports a minimal, privacy-safe integrity anchoring flow that helps detect server-side tampering without ever putting secrets on a blockchain.
-
-### What and why (plain English)
-- Your passwords are end‑to‑end encrypted; the server cannot read them. However, a compromised server could still delete or reorder encrypted items, hide security events, or restore from an "old" backup.
-- To deter this, we create a short fingerprint (hash) of batches of safe metadata (IDs + timestamps) and store only that fingerprint’s Merkle root. Optionally, that root can be published to a public blockchain. Later, we can prove the server did not silently alter history.
-
-### What gets anchored
-- Only safe data: event summaries like userId, action (CREATE/UPDATE/DELETE), resourceType, resourceId, and timestamp.
-- Never secrets, never encrypted blobs.
-
-### How it works
-1. Each credential CRUD event enqueues a small, safe audit record.
-2. Periodically (or on demand), the server computes a Merkle root of the queued records and persists an `AuditAnchor` document containing:
-   - `merkleRoot`, `batchSize`, `anchorTime`, `previousAnchor`
-3. Optionally, you can take that Merkle root and publish it on a public chain. The README keeps it off-chain by default (free). You can later extend this to post on Sepolia/Polygon.
-
-### API
-- GET `/api/integrity/status` (auth required): returns current anchor status and last persisted anchor.
-- POST `/api/integrity/anchor` (auth required): forces an anchor of the current batch and stores it in `AuditAnchor`.
-
-### Verifying integrity (concept)
-- Given the event batch and the stored Merkle root, you can recompute the root. If recomputed root matches the stored one, the server didn’t tamper with those events.
-- If you publish the root on-chain, the on-chain timestamp also proves when the state existed.
-
-### What a user can do if tampering is detected
-- Detect and prove: If the current server state’s recomputed root doesn’t match the last anchored root, you can demonstrate evidence of manipulation.
-- Recover from trusted backups: Compare anchored roots across time, identify the last good state, and restore from backups matching those hashes.
-- Escalate with proof: Share the Merkle root, the event batch, and (optionally) the on-chain tx link to auditors or admins.
-
-### Enable/disable
-- Off-chain anchoring is enabled by default via the internal service. To disable, set `BLOCKCHAIN_ANCHOR_ENABLED=false` in `server/.env`.
-- Optional envs:
-  - `BLOCKCHAIN_ANCHOR_ENABLED=true|false`
-  - `BLOCKCHAIN_ANCHOR_INTERVAL=1000` (anchor every N events)
-
-### Optional: publish to a real blockchain later
-- Use a low-cost chain and post only the Merkle root periodically to keep costs tiny. For demos, use Sepolia (free faucets) with Alchemy/Infura.
-
-# 🔐 SecureVault - Smart Web-Based Password Manager
-
-A professional, full-stack password manager with **client-side AES encryption** built for your final-year project. SecureVault implements **Zero-Knowledge Architecture** where your master key never leaves your device.
+A research-grade password management system implementing **client-side authenticated encryption** with blockchain integrity anchoring. SecureVault uses **Zero-Knowledge Architecture** where sensitive data never leaves the client unencrypted, combined with tamper-evident audit logging for security research applications.
 
 ![SecureVault]
 ![React]
@@ -48,38 +8,38 @@ A professional, full-stack password manager with **client-side AES encryption** 
 ![MongoDB]
 ![AES-256]
 
-## 🎯 Project Overview
+## Project Overview
 
 SecureVault is a sophisticated password management system that prioritizes security through client-side encryption. Your master key and passwords are **never transmitted to the server** in plain text, ensuring complete privacy and security.
 
-### ✨ Key Features
+### Key Features
 
-- **🔒 Client-Side AES-256-CBC Encryption** - All passwords encrypted before leaving your device
-- **🛡️ Zero-Knowledge Architecture** - Master key never sent to server
-- **🎨 Modern React UI** - Beautiful, responsive interface with TailwindCSS
-- **📱 Mobile-First Design** - Works perfectly on all devices
-- **🔍 Advanced Search & Filtering** - Find credentials quickly
-- **⭐ Favorites System** - Mark important credentials
-- **📊 Dashboard Analytics** - View vault statistics
-- **🔧 Password Generator** - Generate strong, secure passwords
-- **📈 Password Strength Indicator** - Real-time strength analysis
-- **📤 Export Functionality** - Backup your encrypted vault
-- **🎯 Category Management** - Organize credentials by type
+- **Client-Side AES-256-CBC Encryption** - All passwords encrypted before leaving your device
+- **Zero-Knowledge Architecture** - Master key never sent to server
+- **Modern React UI** - Beautiful, responsive interface with TailwindCSS
+- **Mobile-First Design** - Works perfectly on all devices
+- **Advanced Search & Filtering** - Find credentials quickly
+- **Favorites System** - Mark important credentials
+- **Dashboard Analytics** - View vault statistics
+- **Password Generator** - Generate strong, secure passwords
+- **Password Strength Indicator** - Real-time strength analysis
+- **Export Functionality** - Backup your encrypted vault
+- **Category Management** - Organize credentials by type
 
-## 🏗️ Architecture
+## Architecture
 
 ```
-┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
-│   React Frontend│    │  Node.js Backend│    │   MongoDB Atlas │
-│                 │    │                 │    │                 │
-│ • AES Encryption│◄──►│ • REST API      │◄──►│ • Credential    │
-│ • Master Key    │    │ • Validation    │    │   Storage       │
-│ • UI Components │    │ • Rate Limiting │    │ • Indexing      │
-│ • State Mgmt    │    │ • Security      │    │ • Backup        │
-└─────────────────┘    └─────────────────┘    └─────────────────┘
++-----------------+    +-----------------+    +-----------------+
+|   React Frontend|    |  Node.js Backend|    |   MongoDB Atlas |
+|                 |    |                 |    |                 |
+| - AES Encryption|<-->| - REST API      |<-->| - Credential    |
+| - Master Key    |    | - Validation    |    |   Storage       |
+| - UI Components |    | - Rate Limiting |    | - Indexing      |
+| - State Mgmt    |    | - Security      |    | - Backup        |
++-----------------+    +-----------------+    +-----------------+
 ```
 
-## 🚀 Quick Start
+## Quick Start
 
 ### Prerequisites
 
@@ -91,7 +51,7 @@ SecureVault is a sophisticated password management system that prioritizes secur
 
 1. **Clone the repository**
    ```bash
-   git clone https://github.com/yourusername/securevault.git
+   git clone https://github.com/rishidhama/securevault.git
    cd securevault
    ```
 
@@ -123,26 +83,26 @@ SecureVault is a sophisticated password management system that prioritizes secur
    - Backend API: http://localhost:5000
    - API Health: http://localhost:5000/api/health
 
-## 🔧 Development
+## Development
 
 ### Project Structure
 
 ```
 securevault/
-├── client/                 # React Frontend
-│   ├── public/
-│   ├── src/
-│   │   ├── components/    # React Components
-│   │   ├── services/      # API Services
-│   │   ├── utils/         # Encryption Utilities
-│   │   └── index.css      # TailwindCSS Styles
-│   └── package.json
-├── server/                 # Node.js Backend
-│   ├── models/            # MongoDB Schemas
-│   ├── routes/            # API Routes
-│   └── index.js           # Express Server
-├── package.json            # Root Dependencies
-└── README.md
++-- client/                 # React Frontend
+|   +-- public/
+|   +-- src/
+|   |   +-- components/    # React Components
+|   |   +-- services/      # API Services
+|   |   +-- utils/         # Encryption Utilities
+|   |   +-- index.css      # TailwindCSS Styles
+|   +-- package.json
++-- server/                 # Node.js Backend
+|   +-- models/            # MongoDB Schemas
+|   +-- routes/            # API Routes
+|   +-- index.js           # Express Server
++-- package.json            # Root Dependencies
++-- README.md
 ```
 
 ### Available Scripts
@@ -161,12 +121,12 @@ npm start                # Start production server
 npm run install-all      # Install all dependencies
 ```
 
-## 🔐 Security Features
+## Security Features
 
 ### Encryption Details
 
-- **Algorithm**: AES-256-CBC
-- **Key Derivation**: PBKDF2 with 1000 iterations
+- **Algorithm**: AES-256-GCM (authenticated encryption)
+- **Key Derivation**: PBKDF2 with 310,000 iterations (OWASP recommended)
 - **Salt Generation**: Cryptographically secure random
 - **IV Generation**: Unique for each password
 - **Client-Side**: All encryption/decryption happens in browser
@@ -185,7 +145,7 @@ npm run install-all      # Install all dependencies
 3. **Server Storage**: Only encrypted data stored in database
 4. **Decryption**: Happens client-side using master key
 
-## 📊 API Endpoints
+## API Endpoints
 
 ### Authentication
 - `GET /api/health` - Health check
@@ -201,7 +161,7 @@ npm run install-all      # Install all dependencies
 - `GET /api/credentials/stats/overview` - Get vault statistics
 - `GET /api/credentials/categories/list` - Get all categories
 
-## 🎨 UI Components
+## UI Components
 
 ### Core Components
 - **Dashboard**: Main interface with stats and credential list
@@ -218,7 +178,7 @@ npm run install-all      # Install all dependencies
 - **Toast Notifications**: User feedback with react-hot-toast
 - **Icons**: Lucide React icons throughout
 
-## 🛠️ Technology Stack
+## Technology Stack
 
 ### Frontend
 - **React 18** - Modern React with hooks
@@ -242,7 +202,7 @@ npm run install-all      # Install all dependencies
 - **PostCSS** - CSS processing
 - **Autoprefixer** - CSS vendor prefixes
 
-## 📈 Database Schema
+## Database Schema
 
 ### Credential Model
 ```javascript
@@ -262,7 +222,7 @@ npm run install-all      # Install all dependencies
 }
 ```
 
-## 🚀 Deployment
+## Deployment
 
 ### Environment Variables
 ```env
@@ -284,7 +244,7 @@ cd client && npm run build
 npm start
 ```
 
-## 🔍 Testing
+## Testing
 
 ### Manual Testing Checklist
 - [ ] Master key entry and validation
@@ -298,7 +258,7 @@ npm start
 - [ ] Responsive design on mobile
 - [ ] Security headers verification
 
-## 🛠️ Troubleshooting
+## Troubleshooting
 
 ### Master Key Decryption Issues
 
@@ -374,35 +334,27 @@ Make sure your MongoDB instance is running and the connection string in `.env` i
    - Network/firewall blocking connection
    - Authentication credentials incorrect
 
-## 📝 Project Features for Interview
+## Research Contributions
 
-### Technical Excellence
-- ✅ **Full-Stack Development** - React + Node.js + MongoDB
-- ✅ **Security Implementation** - AES-256-CBC encryption
-- ✅ **Modern Architecture** - Zero-knowledge design
-- ✅ **Professional UI/UX** - TailwindCSS with responsive design
-- ✅ **API Design** - RESTful API with proper validation
-- ✅ **Database Design** - MongoDB with Mongoose schemas
-- ✅ **Error Handling** - Comprehensive error management
-- ✅ **Code Organization** - Modular, maintainable code
+### Security Architecture
+- **Zero-Knowledge Design**: Master key never transmitted to server
+- **Authenticated Encryption**: AES-256-GCM prevents tampering attacks
+- **Integrity Anchoring**: Blockchain-based tamper detection without data exposure
+- **Threat Model**: Defends against server compromise, data breaches, and insider threats
 
-### Advanced Features
-- ✅ **Client-Side Encryption** - CryptoJS implementation
-- ✅ **Password Strength Analysis** - Real-time strength checking
-- ✅ **Search & Filtering** - Advanced credential management
-- ✅ **Export Functionality** - Backup and restore capabilities
-- ✅ **Responsive Design** - Mobile-first approach
-- ✅ **Security Best Practices** - Helmet, CORS, rate limiting
+### Cryptographic Implementation
+- **Key Derivation**: PBKDF2 with 310,000 iterations (OWASP compliant)
+- **Encryption Mode**: GCM provides both confidentiality and authenticity
+- **Salt Management**: Unique per-credential salts prevent rainbow table attacks
+- **Backward Compatibility**: Graceful handling of legacy CBC-encrypted data
 
-### Interview Talking Points
-1. **Security Architecture**: Explain zero-knowledge design
-2. **Encryption Implementation**: Detail AES-256-CBC process
-3. **Database Design**: Discuss MongoDB schema and indexing
-4. **API Design**: RESTful endpoints with validation
-5. **Frontend Architecture**: React hooks and state management
-6. **Deployment Strategy**: Production considerations
+### Research Applications
+- **Audit Logging**: Immutable blockchain records for forensic analysis
+- **Breach Detection**: Integration with HaveIBeenPwned API
+- **Performance Analysis**: Measured encryption performance across devices
+- **Security Testing**: Comprehensive test suite for cryptographic functions
 
-## 🤝 Contributing
+## Contributing
 
 1. Fork the repository
 2. Create a feature branch
@@ -410,11 +362,11 @@ Make sure your MongoDB instance is running and the connection string in `.env` i
 4. Test thoroughly
 5. Submit a pull request
 
-## 📄 License
+## License
 
 This project is licensed under the MIT License - see the LICENSE file for details.
 
-## 🙏 Acknowledgments
+## Acknowledgments
 
 - **CryptoJS** for client-side encryption
 - **TailwindCSS** for beautiful styling
@@ -423,4 +375,4 @@ This project is licensed under the MIT License - see the LICENSE file for detail
 
 ---
 
-**🔐 SecureVault** - Your passwords, your control, your security.
+**SecureVault** - Your passwords, your control, your security.

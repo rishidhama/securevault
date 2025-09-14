@@ -48,10 +48,10 @@ const BlockchainStatus = () => {
           <div className="text-sm font-medium text-secondary-700">Blockchain (Sepolia)</div>
           {status?.initialized ? (
             <div className="text-xs text-secondary-500 mt-1">
-              ✅ Connected · {info.network} · ChainId {info.chainId}
+              Connected · {info.network} · ChainId {info.chainId}
             </div>
           ) : (
-            <div className="text-xs text-secondary-500 mt-1">❌ Not initialized</div>
+            <div className="text-xs text-secondary-500 mt-1">Not initialized</div>
           )}
         </div>
         <button onClick={fetchStatus} className="btn-secondary text-sm">Refresh</button>

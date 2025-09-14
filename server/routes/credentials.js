@@ -26,7 +26,7 @@ const createBlockchainEvent = async (userId, action, credentialId, credentialDat
       })
     };
 
-    console.log(`🔍 Creating blockchain event for ${action} credential ${credentialId}:`, {
+    console.log(`Blockchain event: ${action} credential ${credentialId}`, {
       userId,
       vaultData,
       credentialData: credentialData ? {
@@ -66,13 +66,13 @@ const createBlockchainEvent = async (userId, action, credentialId, credentialDat
       });
     }
     
-    console.log(`🔗 Blockchain event logged: ${action} credential ${credentialId} for user ${userId}`, {
+    console.log(`Blockchain event logged: ${action} credential ${credentialId}`, {
       txHash: result.txHash,
       etherscanUrl: result.etherscanUrl,
       vaultHash: vaultHash
     });
   } catch (error) {
-    console.error(`⚠️ Blockchain event failed for ${action} credential ${credentialId}:`, error.message);
+    console.error(`Blockchain event failed for ${action} credential ${credentialId}:`, error.message);
     // Don't throw - blockchain failures shouldn't break credential operations
   }
 };

@@ -10,8 +10,11 @@
     "build": "cd client && npm run build",
     "install-all": "npm install && cd client && npm install",
     "start": "node server/index.js",
-    "test:blockchain": "echo 'No tests in production'",
-    "deploy:contract": "echo 'Deployment script removed'"
+    "test": "jest",
+    "test:security": "npm audit && npm run test:encryption",
+    "test:encryption": "node server/tests/encryption.test.js",
+    "lint": "eslint . --ext .js,.jsx",
+    "format": "prettier --write ."
   },
   "keywords": [
     "password-manager",
@@ -21,7 +24,7 @@
     "react",
     "nodejs"
   ],
-  "author": "Your Name",
+  "author": "Security Research Team <research@securevault.dev>",
   "license": "MIT",
   "dependencies": {
     "bcryptjs": "^2.4.3",

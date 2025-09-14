@@ -1,4 +1,5 @@
-// API configuration - supports both development and production
+// VaultAPI - Centralized API client for SecureVault backend
+// Handles authentication, error management, and request routing
 const API_BASE_URL = process.env.REACT_APP_API_URL || 
   (process.env.NODE_ENV === 'production' 
     ? window.location.origin 
@@ -127,20 +128,13 @@ export const mfaAPI = {
 
 // Credentials API endpoints
 export const credentialsAPI = {
-  getAll: () => apiRequest('/api/credentials'),
+  list: () => apiRequest('/api/credentials'),
   
-  getCredentials: () => apiRequest('/api/credentials'),
+  stats: () => apiRequest('/api/credentials/stats/overview'),
   
-  getStats: () => apiRequest('/api/credentials/stats/overview'),
-  
-  getCategories: () => apiRequest('/api/credentials/categories/list'),
+  categories: () => apiRequest('/api/credentials/categories/list'),
   
   create: (credential) => apiRequest('/api/credentials', {
-    method: 'POST',
-    body: JSON.stringify(credential)
-  }),
-  
-  createCredential: (credential) => apiRequest('/api/credentials', {
     method: 'POST',
     body: JSON.stringify(credential)
   }),
@@ -150,16 +144,7 @@ export const credentialsAPI = {
     body: JSON.stringify(credential)
   }),
   
-  updateCredential: (id, credential) => apiRequest(`/api/credentials/${id}`, {
-    method: 'PUT',
-    body: JSON.stringify(credential)
-  }),
-  
-  delete: (id) => apiRequest(`/api/credentials/${id}`, {
-    method: 'DELETE'
-  }),
-  
-  deleteCredential: (id) => apiRequest(`/api/credentials/${id}`, {
+  remove: (id) => apiRequest(`/api/credentials/${id}`, {
     method: 'DELETE'
   }),
   

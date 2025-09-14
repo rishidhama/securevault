@@ -84,7 +84,7 @@ const BlockchainStatusSummary = ({ userId }) => {
           <div>
             <h3 className="font-medium text-gray-900">Blockchain Security</h3>
             <p className="text-sm text-gray-600">
-              {isActive ? 'Active' : hasError ? 'Service Unavailable' : 'Offline'} • {hasActivity ? `${activityCount} operations recorded` : 'No activity yet'}
+              {isActive ? 'Active' : hasError ? 'Service Unavailable' : 'Offline'} - {hasActivity ? `${activityCount} operations recorded` : 'No activity yet'}
             </p>
             {hasError && (
               <p className="text-xs text-yellow-600 mt-1">

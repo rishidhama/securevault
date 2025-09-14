@@ -779,7 +779,7 @@ const SmartCategories = ({ credentials, onUpdateCredential, onAddCredential }) =
                     </div>
                     <div className="text-sm text-gray-600 dark:text-gray-300">
                       <span className="line-through">{suggestion.currentCategory}</span>
-                      <span className="mx-3 text-gray-500 dark:text-gray-400">→</span>
+                      <span className="mx-3 text-gray-500 dark:text-gray-400">-</span>
                       <span className="font-semibold text-blue-600 dark:text-blue-400">{suggestion.suggestedCategoryName}</span>
                     </div>
                   </div>

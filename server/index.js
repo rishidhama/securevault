@@ -59,14 +59,14 @@ const connectDB = async () => {
 
   const attemptConnection = async () => {
     try {
-      console.log(`🔄 Attempting MongoDB connection (attempt ${retryCount + 1}/${maxRetries})...`);
+      console.log(`Attempting MongoDB connection (attempt ${retryCount + 1}/${maxRetries})...`);
       
       // Check if MONGODB_URI is set
       const mongoUri = process.env.MONGODB_URI;
       if (!mongoUri) {
-        console.error('❌ MONGODB_URI environment variable is not set!');
-        console.log('📝 Please create a .env file with your MongoDB connection string');
-        console.log('📖 See MONGODB_SETUP.md for detailed instructions');
+        console.error('MONGODB_URI environment variable is not set.');
+        console.log('Create a .env file with your MongoDB connection string.');
+        console.log('See MONGODB_SETUP.md for detailed instructions.');
         return false;
       }
 
@@ -87,46 +87,26 @@ const connectDB = async () => {
 
       await mongoose.connect(mongoUri, connectionOptions);
       
-      console.log('✅ Connected to MongoDB successfully');
-      console.log(`📊 Database: ${mongoose.connection.name}`);
-      console.log(`🌐 Host: ${mongoose.connection.host}`);
+      console.log('Connected to MongoDB successfully');
+      console.log(`Database: ${mongoose.connection.name}`);
+      console.log(`Host: ${mongoose.connection.host}`);
       
       // Set up connection event listeners
       mongoose.connection.on('error', (err) => {
-        console.error('❌ MongoDB connection error:', err.message);
-        if (err.message.includes('ECONNREFUSED')) {
-          console.log('💡 Tip: Check if MongoDB service is running');
-        } else if (err.message.includes('ENOTFOUND')) {
-          console.log('💡 Tip: Check your internet connection and DNS');
-        } else if (err.message.includes('ETIMEDOUT')) {
-          console.log('💡 Tip: Network timeout - check firewall/antivirus settings');
-        }
+        console.error('MongoDB connection error:', err.message);
       });
 
       mongoose.connection.on('disconnected', () => {
-        console.log('⚠️  MongoDB disconnected - attempting to reconnect...');
+        console.log('MongoDB disconnected - attempting to reconnect.');
       });
 
       mongoose.connection.on('reconnected', () => {
-        console.log('🔄 MongoDB reconnected successfully');
+        console.log('MongoDB reconnected successfully');
       });
 
       return true;
     } catch (err) {
-      console.error(`❌ MongoDB connection attempt ${retryCount + 1} failed:`, err.message);
-      
-      // Provide specific error guidance
-      if (err.message.includes('ECONNREFUSED')) {
-        console.log('💡 This usually means MongoDB is not running or not accessible');
-      } else if (err.message.includes('ENOTFOUND')) {
-        console.log('💡 This usually means DNS resolution failed - check your internet connection');
-      } else if (err.message.includes('ETIMEDOUT')) {
-        console.log('💡 This usually means network timeout - check firewall settings');
-      } else if (err.message.includes('IP not whitelisted')) {
-        console.log('💡 Your IP is not whitelisted in MongoDB Atlas - add your IP to the whitelist');
-      } else if (err.message.includes('Authentication failed')) {
-        console.log('💡 Check your MongoDB username and password in the connection string');
-      }
+      console.error(`MongoDB connection attempt ${retryCount + 1} failed:`, err.message);
       
       return false;
     }
@@ -142,15 +122,15 @@ const connectDB = async () => {
     retryCount++;
     if (retryCount < maxRetries) {
       const delay = Math.min(1000 * Math.pow(2, retryCount), 10000); // Exponential backoff, max 10s
-      console.log(`⏳ Retrying in ${delay/1000} seconds...`);
+      console.log(`Retrying in ${delay/1000} seconds...`);
       await new Promise(resolve => setTimeout(resolve, delay));
     }
   }
 
   // If all retries failed
-  console.error('❌ All MongoDB connection attempts failed');
-  console.error('💥 Application cannot start without database connection');
-  console.log('\n🔧 Troubleshooting steps:');
+  console.error('All MongoDB connection attempts failed');
+  console.error('Application cannot start without database connection');
+  console.log('\nTroubleshooting steps:');
   console.log('   1. Check your internet connection');
   console.log('   2. Verify MONGODB_URI in .env file');
   console.log('   3. If using MongoDB Atlas:');
@@ -161,7 +141,7 @@ const connectDB = async () => {
   console.log('      - Start MongoDB service');
   console.log('      - Check if port 27017 is available');
   console.log('   5. Check firewall/antivirus settings');
-  console.log('\n📖 See MONGODB_SETUP.md for detailed instructions');
+  console.log('\nSee MONGODB_SETUP.md for detailed instructions');
   process.exit(1);
 };
 
@@ -208,6 +188,6 @@ app.use('*', (req, res) => {
 });
 
 app.listen(PORT, () => {
-  console.log(`🚀 SecureVault server running on port ${PORT}`);
-  console.log(`📊 Environment: ${process.env.NODE_ENV || 'development'}`);
-}); 
+  console.log(`SecureVault server running on port ${PORT}`);
+  console.log(`Environment: ${process.env.NODE_ENV || 'development'}`);
+});

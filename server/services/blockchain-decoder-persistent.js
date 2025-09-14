@@ -60,13 +60,11 @@ class PersistentBlockchainDecoder {
       // Also store in cache for quick access
       this.operationCache.set(txHash, operationWithTimestamp);
 
-      console.log(`📝 Stored operation details in database for txHash: ${txHash}`);
-      console.log(`📊 Operation: ${operationData.action} credential ${operationData.credentialId}`);
-      console.log(`🔍 Title: ${operationData.credentialData?.title || 'Unknown'}`);
+      console.log(`Stored operation details for txHash: ${txHash}`);
 
       return true;
     } catch (error) {
-      console.error('❌ Failed to store operation details:', error.message);
+      console.error('Failed to store operation details:', error.message);
       return false;
     }
   }
@@ -87,7 +85,7 @@ class PersistentBlockchainDecoder {
         .sort({ storedAt: -1 })
         .limit(100);
 
-      console.log(`📋 Retrieved ${operations.length} transactions from database for user ${userId}`);
+      console.log(`Retrieved ${operations.length} transactions for user ${userId}`);
 
       return operations.map(op => ({
         txHash: op.txHash,
@@ -101,7 +99,7 @@ class PersistentBlockchainDecoder {
         storedAt: op.storedAt
       }));
     } catch (error) {
-      console.error('❌ Failed to get user transaction history:', error.message);
+      console.error('Failed to get user transaction history:', error.message);
       return [];
     }
   }
@@ -112,10 +110,10 @@ class PersistentBlockchainDecoder {
   async getAllOperations() {
     try {
       const operations = await BlockchainOperation.find().sort({ storedAt: -1 });
-      console.log(`📊 Total operations in database: ${operations.length}`);
+      console.log(`Total operations in database: ${operations.length}`);
       return operations;
     } catch (error) {
-      console.error('❌ Failed to get all operations:', error.message);
+      console.error('Failed to get all operations:', error.message);
       return [];
     }
   }

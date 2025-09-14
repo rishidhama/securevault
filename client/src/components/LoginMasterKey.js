@@ -188,7 +188,7 @@ const LoginMasterKey = ({ onLoginSuccess }) => {
         console.log('Server response:', result);
       } catch (serverError) {
         console.warn('Failed to store credential on server:', serverError);
-        // Continue with local storage only - this is acceptable for demo
+        // Continue with local storage only - server storage optional
       }
 
       setBiometricEnabled(true);

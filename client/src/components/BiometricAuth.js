@@ -350,7 +350,7 @@ const BiometricAuth = ({ onAuthenticate, onCancel, isEnabled = false, masterKey 
       {!isEnabled && (!masterKey || masterKey.length < 8) && (
         <div className="bg-warning-50 dark:bg-warning-900/20 border border-warning-200 dark:border-warning-700 rounded-lg p-3 mb-4">
           <p className="text-warning-800 dark:text-warning-200 text-sm">
-            ⚠️ Master key is required to setup biometric authentication. Please ensure you're logged in with your master key.
+            Master key is required to setup biometric authentication. Please ensure you're logged in with your master key.
           </p>
         </div>
       )}

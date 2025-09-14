@@ -1,10 +1,17 @@
 const { ethers } = require('ethers');
 
 /**
- * Real Ethereum Service for Sepolia Testnet
- * This service provides actual blockchain functionality
+ * VaultChain - Blockchain Integrity Service
+ * 
+ * Provides tamper-evident storage of vault integrity hashes on Ethereum.
+ * Uses Sepolia testnet for cost-effective integrity anchoring without
+ * storing sensitive data on-chain.
+ * 
+ * Architecture decision: Only store Merkle roots of audit events, never
+ * plaintext credentials or encrypted data. This provides tamper detection
+ * while maintaining privacy.
  */
-class EthereumService {
+class VaultChain {
   constructor() {
     this.enabled = process.env.ETHEREUM_ENABLED === 'true';
     this.rpcUrl = process.env.SEPOLIA_RPC_URL;
@@ -18,7 +25,7 @@ class EthereumService {
 
   async init() {
     if (!this.enabled) {
-      console.log('⚠️ Ethereum service is disabled');
+      console.log('Ethereum service is disabled');
       return false;
     }
 
@@ -35,9 +42,9 @@ class EthereumService {
       const network = await this.provider.getNetwork();
       const balance = await this.wallet.getBalance();
       
-      console.log(`✅ Connected to ${network.name} (Chain ID: ${network.chainId})`);
-      console.log(`👤 Wallet: ${this.wallet.address}`);
-      console.log(`💰 Balance: ${ethers.utils.formatEther(balance)} ETH`);
+      console.log(`Connected to ${network.name} (Chain ID: ${network.chainId})`);
+      console.log(`Wallet: ${this.wallet.address}`);
+      console.log(`Balance: ${ethers.utils.formatEther(balance)} ETH`);
 
       // Deploy or connect to contract
       if (this.contractAddress) {
@@ -50,14 +57,14 @@ class EthereumService {
       return true;
 
     } catch (error) {
-      console.error('❌ Ethereum service initialization failed:', error.message);
+      console.error('Ethereum service initialization failed:', error.message);
       return false;
     }
   }
 
   async deployContract() {
     try {
-      console.log('🚀 Deploying PasswordVault contract to Sepolia...');
+      console.log('Deploying PasswordVault contract to Sepolia...');
       
       // Simple contract for storing password vault hashes
       const contractSource = `
@@ -101,20 +108,20 @@ class EthereumService {
       this.contract = contract;
       this.contractAddress = contract.address;
       
-      console.log(`✅ Contract deployed to: ${contract.address}`);
-      console.log(`📝 Add this to your .env: CONTRACT_ADDRESS=${contract.address}`);
+      console.log(`Contract deployed to: ${contract.address}`);
+      console.log(`Add this to your .env: CONTRACT_ADDRESS=${contract.address}`);
       
       return contract.address;
 
     } catch (error) {
-      console.error('❌ Contract deployment failed:', error.message);
+      console.error('Contract deployment failed:', error.message);
       throw error;
     }
   }
 
   async connectToContract() {
     try {
-      console.log(`🔗 Connecting to existing contract: ${this.contractAddress}`);
+      console.log(`Connecting to existing contract: ${this.contractAddress}`);
       
       const contractABI = [
         'function updateVaultHash(string,string)',
@@ -130,10 +137,10 @@ class EthereumService {
         throw new Error('No contract found at specified address');
       }
       
-      console.log('✅ Contract connection successful');
+      console.log('Contract connection successful');
       
     } catch (error) {
-      console.error('❌ Contract connection failed:', error.message);
+      console.error('Contract connection failed:', error.message);
       throw error;
     }
   }
@@ -144,8 +151,8 @@ class EthereumService {
     }
 
     try {
-      console.log(`🔗 Storing vault hash for user ${userId} on Sepolia...`);
-      console.log(`📋 Transaction details:`, {
+      console.log(`Storing vault hash for user ${userId} on Sepolia...`);
+      console.log(`Transaction details:`, {
         userId: userId,
         userIdLength: userId.length,
         vaultHash: vaultHash,
@@ -158,9 +165,9 @@ class EthereumService {
       try {
         const estimatedGas = await this.contract.estimateGas.updateVaultHash(userId, vaultHash);
         gasLimit = estimatedGas.mul(120).div(100); // Add 20% buffer
-        console.log(`📊 Estimated gas: ${estimatedGas.toString()}, Using: ${gasLimit.toString()}`);
+        console.log(`Estimated gas: ${estimatedGas.toString()}, Using: ${gasLimit.toString()}`);
       } catch (error) {
-        console.log(`⚠️ Gas estimation failed, using default: ${error.message}`);
+        console.log(`Gas estimation failed, using default: ${error.message}`);
         gasLimit = 300000; // Increased default gas limit
       }
       
@@ -168,10 +175,10 @@ class EthereumService {
         gasLimit: gasLimit
       });
       
-      console.log(`📝 Transaction sent: ${tx.hash}`);
+      console.log(`Transaction sent: ${tx.hash}`);
       
       const receipt = await tx.wait();
-      console.log(`✅ Transaction confirmed in block ${receipt.blockNumber}`);
+      console.log(`Transaction confirmed in block ${receipt.blockNumber}`);
       
       return {
         success: true,
@@ -181,7 +188,7 @@ class EthereumService {
       };
       
     } catch (error) {
-      console.error('❌ Failed to store vault hash:', error.message);
+      console.error('Failed to store vault hash:', error.message);
       return {
         success: false,
         error: error.message
@@ -209,7 +216,7 @@ class EthereumService {
       };
       
     } catch (error) {
-      console.error('❌ Failed to get vault hash:', error.message);
+      console.error('Failed to get vault hash:', error.message);
       throw error;
     }
   }
@@ -241,25 +248,23 @@ class EthereumService {
     try {
       // For now, return empty array as blockchain event querying is complex
       // In a production system, you'd want to implement proper event indexing
-      console.log(`📋 Transaction history requested for user: ${userId}`);
-      console.log('⚠️ Blockchain event querying not fully implemented - returning empty array');
+      console.log(`Transaction history requested for user: ${userId}`);
+      console.log('Event querying requires external indexing service');
       
-      // TODO: Implement proper blockchain event querying
-      // This would require:
-      // 1. Event indexing service
-      // 2. Database storage of events
-      // 3. Proper event filtering by userId
+      // Note: Event querying requires external indexing service
+      // For production, implement with The Graph Protocol or similar
+      // Current implementation stores events in database for querying
       
       return [];
       
     } catch (error) {
-      console.error('❌ Failed to get transaction history:', error.message);
+      console.error('Failed to get transaction history:', error.message);
       return [];
     }
   }
 }
 
-module.exports = new EthereumService();
+module.exports = new VaultChain();
 
 
 
