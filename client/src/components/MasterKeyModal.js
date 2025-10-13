@@ -31,8 +31,15 @@ const MasterKeyModal = ({ isOpen, onClose, onSubmit, isError = false, errorMessa
       return;
     }
 
-    if (masterKey.length < 8) {
-      setErrors({ masterKey: 'Master key must be at least 8 characters long' });
+    if (masterKey.length < 12) {
+      setErrors({ masterKey: 'Master key must be at least 12 characters long' });
+      return;
+    }
+    
+    // Check for weak master keys
+    const weakKeys = ['password', '123456', 'masterkey', 'securevault'];
+    if (weakKeys.includes(masterKey.toLowerCase())) {
+      setErrors({ masterKey: 'Master key is too weak. Please choose a stronger password.' });
       return;
     }
 
@@ -166,7 +173,7 @@ const MasterKeyModal = ({ isOpen, onClose, onSubmit, isError = false, errorMessa
             <button
               type="submit"
               className="flex-1 px-4 py-2 bg-primary-600 text-white hover:bg-primary-700 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-              disabled={!masterKey.trim() || masterKey.length < 8}
+              disabled={!masterKey.trim() || masterKey.length < 12}
             >
               {isError ? 'Re-enter Key' : 'Continue'}
             </button>

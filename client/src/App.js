@@ -22,9 +22,10 @@ import BreachMonitor from './components/BreachMonitor';
 import SmartCategories from './components/SmartCategories';
 
 // Services
-import { credentialsAPI } from './services/api';
+import { credentialsAPI, blockchainAPI } from './services/api';
 import encryptionService from './utils/encryption';
 import { authAPI } from './services/api';
+import { computeMerkleRoot } from './utils/merkle';
 
 // Styles
 import './index.css';
@@ -66,6 +67,33 @@ function App() {
   useEffect(() => {
     checkAuthStatus();
     initializeTheme();
+  }, []);
+
+
+  // Idle-timeout: clear master key and logout after inactivity
+  useEffect(() => {
+    const IDLE_TIMEOUT_MINUTES = 30; // adjust as needed
+    const IDLE_TIMEOUT_MS = IDLE_TIMEOUT_MINUTES * 60 * 1000;
+    let idleTimer = null;
+
+    const resetTimer = () => {
+      if (idleTimer) clearTimeout(idleTimer);
+      idleTimer = setTimeout(() => {
+        // Clear sensitive data and force logout on idle
+        clearAuthData();
+      }, IDLE_TIMEOUT_MS);
+    };
+
+    const activityEvents = ['mousemove', 'keydown', 'scroll', 'click', 'touchstart', 'visibilitychange'];
+    activityEvents.forEach(evt => window.addEventListener(evt, resetTimer, { passive: true }));
+
+    // Start timer
+    resetTimer();
+
+    return () => {
+      if (idleTimer) clearTimeout(idleTimer);
+      activityEvents.forEach(evt => window.removeEventListener(evt, resetTimer));
+    };
   }, []);
 
 
@@ -158,9 +186,15 @@ function App() {
       ]);
 
       // Handle the response structure correctly
-      setCredentials(credentialsResponse.data || credentialsResponse || []);
+      const creds = credentialsResponse.data || credentialsResponse || [];
+      setCredentials(creds);
       setStats(statsResponse.data || statsResponse || { total: 0, favorites: 0, categories: 0 });
       setCategories(categoriesResponse.data || categoriesResponse || []);
+
+      // Warm decrypt cache to keep UI synchronous
+      try {
+        await encryptionService.warmDecryptCache(creds, masterKey);
+      } catch (_) {}
     } catch (error) {
       console.error('Failed to load data:', error);
       // Set empty defaults on error
@@ -230,7 +264,7 @@ function App() {
 
       // Only encrypt if password is present and not already encrypted
       if (credentialData.password && !credentialData.encryptedPassword) {
-        const encryptedData = encryptionService.encryptPassword(
+        const encryptedData = await encryptionService.encryptPassword(
           credentialData.password,
           masterKey
         );
@@ -255,6 +289,20 @@ function App() {
       const newCredentialData = response.data || response;
       setCredentials(prev => [newCredentialData, ...prev]);
       setStats(prev => ({ ...prev, total: prev.total + 1 }));
+
+      // Warm cache for the newly added credential
+      try { await encryptionService.warmDecryptCache([newCredentialData], masterKey); } catch (_) {}
+
+      // Anchor new Merkle root in background
+      try {
+        const updated = [newCredentialData, ...credentials];
+        const root = await computeMerkleRoot(updated);
+        if (root && user?.id) {
+          await blockchainAPI.storeVault(user.id, { merkleRoot: root });
+        }
+      } catch (e) {
+        console.log('Anchoring skipped/failed:', e?.message || e);
+      }
       
       return newCredentialData;
     } catch (error) {
@@ -267,6 +315,17 @@ function App() {
       await credentialsAPI.remove(id);
       setCredentials(prev => prev.filter(cred => cred._id !== id));
       setStats(prev => ({ ...prev, total: prev.total - 1 }));
+
+      // Anchor new Merkle root in background
+      try {
+        const updated = credentials.filter(cred => cred._id !== id);
+        const root = await computeMerkleRoot(updated);
+        if (root && user?.id) {
+          await blockchainAPI.storeVault(user.id, { merkleRoot: root });
+        }
+      } catch (e) {
+        console.log('Anchoring skipped/failed:', e?.message || e);
+      }
     } catch (error) {
       throw error;
     }
@@ -294,13 +353,21 @@ function App() {
   const handleUpdateCredential = async (id, updates) => {
     try {
       const response = await credentialsAPI.update(id, updates);
-      setCredentials(prev => 
-        prev.map(cred => 
-          cred._id === id 
-            ? { ...cred, ...response.data }
-            : cred
-        )
-      );
+      let updatedList;
+      setCredentials(prev => {
+        updatedList = prev.map(cred => cred._id === id ? { ...cred, ...response.data } : cred);
+        return updatedList;
+      });
+
+      // Anchor new Merkle root in background
+      try {
+        const root = await computeMerkleRoot(updatedList || credentials);
+        if (root && user?.id) {
+          await blockchainAPI.storeVault(user.id, { merkleRoot: root });
+        }
+      } catch (e) {
+        console.log('Anchoring skipped/failed:', e?.message || e);
+      }
       return response.data;
     } catch (error) {
       throw error;

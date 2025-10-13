@@ -171,16 +171,17 @@ export const billingAPI = {
 // Blockchain API endpoints (Sepolia)
 export const blockchainAPI = {
   status: () => apiRequest('/api/blockchain/status'),
-  storeVault: (userId, vaultData) => apiRequest('/api/blockchain/store-vault', {
+  stats: () => apiRequest('/api/blockchain/stats'),
+  storeVault: (userId, payload) => apiRequest('/api/blockchain/store-vault', {
     method: 'POST',
-    body: JSON.stringify({ userId, vaultData })
+    body: JSON.stringify({ userId, ...payload })
   }),
   getVault: (userId) => apiRequest(`/api/blockchain/vault/${encodeURIComponent(userId)}`),
   history: (userId) => apiRequest(`/api/blockchain/history/${encodeURIComponent(userId)}`),
   activity: (userId) => apiRequest(`/api/blockchain/activity/${encodeURIComponent(userId)}`),
-  verify: (userId, vaultData) => apiRequest('/api/blockchain/verify', {
+  verify: (userId, payload) => apiRequest('/api/blockchain/verify', {
     method: 'POST',
-    body: JSON.stringify({ userId, vaultData })
+    body: JSON.stringify({ userId, ...payload })
   })
 };
 

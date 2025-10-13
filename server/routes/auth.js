@@ -37,8 +37,8 @@ const validateRegistration = [
   body('masterKey')
     .notEmpty()
     .withMessage('Master key is required')
-    .isLength({ min: 8 })
-    .withMessage('Master key must be at least 8 characters long')
+    .isLength({ min: 12 })
+    .withMessage('Master key must be at least 12 characters long')
 ];
 
 const validateLogin = [
@@ -175,15 +175,27 @@ router.post('/login', validateLogin, async (req, res) => {
         });
       }
 
-      // Validate master key
-      const isValidKey = await user.validateMasterKey(masterKey);
-      if (!isValidKey) {
-        // Increment failed login attempts
+      // Validate master key with additional security checks
+      try {
+        const isValidKey = await user.validateMasterKey(masterKey);
+        if (!isValidKey) {
+          // Increment failed login attempts
+          await user.incLoginAttempts();
+          
+          return res.status(401).json({
+            success: false,
+            error: 'Invalid email or master key',
+            code: 'INVALID_CREDENTIALS'
+          });
+        }
+      } catch (keyError) {
+        // Master key validation failed (too weak, etc.)
         await user.incLoginAttempts();
         
         return res.status(401).json({
           success: false,
-          error: 'Invalid email or master key'
+          error: 'Invalid email or master key',
+          code: 'INVALID_CREDENTIALS'
         });
       }
 
@@ -549,6 +561,7 @@ router.get('/profile', authenticateToken, async (req, res) => {
           email: user.email,
           name: user.name,
           mfaEnabled: user.mfaEnabled,
+          biometricEnabled: user.biometricEnabled,
           lastLogin: user.lastLogin,
           createdAt: user.createdAt,
           preferences: user.preferences || undefined
@@ -700,10 +713,10 @@ router.post('/change-master-key', authenticateToken, async (req, res) => {
       });
     }
 
-    if (newMasterKey.length < 8) {
+    if (newMasterKey.length < 12) {
       return res.status(400).json({
         success: false,
-        error: 'New master key must be at least 8 characters long'
+        error: 'New master key must be at least 12 characters long'
       });
     }
 

@@ -3,6 +3,25 @@ import { Fingerprint, Eye, Shield, AlertTriangle, CheckCircle } from 'lucide-rea
 import toast from 'react-hot-toast';
 import { authAPI } from '../services/api';
 
+// Helper: base64url <-> ArrayBuffer conversions for WebAuthn
+const base64urlToArrayBuffer = (base64url) => {
+  const padding = '='.repeat((4 - (base64url.length % 4)) % 4);
+  const base64 = (base64url.replace(/-/g, '+').replace(/_/g, '/')) + padding;
+  const raw = atob(base64);
+  const buffer = new ArrayBuffer(raw.length);
+  const bytes = new Uint8Array(buffer);
+  for (let i = 0; i < raw.length; i++) bytes[i] = raw.charCodeAt(i);
+  return buffer;
+};
+
+const arrayBufferToBase64url = (buffer) => {
+  const bytes = new Uint8Array(buffer);
+  let binary = '';
+  for (let i = 0; i < bytes.byteLength; i++) binary += String.fromCharCode(bytes[i]);
+  const base64 = btoa(binary);
+  return base64.replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/g, '');
+};
+
 const BiometricAuth = ({ onAuthenticate, onCancel, isEnabled = false, masterKey }) => {
   const [isSupported, setIsSupported] = useState(false);
   const [isAuthenticating, setIsAuthenticating] = useState(false);
@@ -91,39 +110,29 @@ const BiometricAuth = ({ onAuthenticate, onCancel, isEnabled = false, masterKey 
       const userEmail = localStorage.getItem('securevault_user') ? 
         JSON.parse(localStorage.getItem('securevault_user')).email : 'user@securevault.com';
 
-      // Create credential options with better error handling
-      const credentialOptions = {
-        publicKey: {
-          rp: {
-            name: 'SecureVault',
-            id: window.location.hostname || 'localhost'
-          },
-          user: {
-            id: new TextEncoder().encode(userEmail),
-            name: userEmail,
-            displayName: userEmail
-          },
-          pubKeyCredParams: [
-            { type: 'public-key', alg: -7 }, // ES256
-            { type: 'public-key', alg: -257 }, // RS256
-            { type: 'public-key', alg: -37 }, // PS256
-            { type: 'public-key', alg: -35 } // RS1
-          ],
-          authenticatorSelection: {
-            authenticatorAttachment: 'platform',
-            userVerification: 'required',
-            requireResidentKey: false
-          },
-          challenge: crypto.getRandomValues(new Uint8Array(32)),
-          timeout: 120000, // Increased timeout
-          attestation: 'none' // Don't require attestation for better compatibility
-        }
-      };
+      // Fetch server-provided registration (attestation) options (if exposed)
+      // Fallback to local minimal options if not available
+      let creationOptions;
+      try {
+        // Optional: if backend provides dedicated registration endpoint, call it here
+        // Otherwise, construct client-side options
+        creationOptions = {
+          publicKey: {
+            rp: { name: 'SecureVault', id: window.location.hostname || 'localhost' },
+            user: { id: new TextEncoder().encode(userEmail), name: userEmail, displayName: userEmail },
+            pubKeyCredParams: [
+              { type: 'public-key', alg: -7 },
+              { type: 'public-key', alg: -257 }
+            ],
+            authenticatorSelection: { authenticatorAttachment: 'platform', userVerification: 'required', requireResidentKey: false },
+            challenge: crypto.getRandomValues(new Uint8Array(32)),
+            timeout: 120000,
+            attestation: 'none'
+          }
+        };
+      } catch (_) {}
 
-      console.log('Creating biometric credential with options:', credentialOptions);
-
-      // Create credential with user interaction
-      const credential = await window.navigator.credentials.create(credentialOptions);
+      const credential = await window.navigator.credentials.create(creationOptions);
       
       if (!credential) {
         throw new Error('Failed to create biometric credential - user may have cancelled');
@@ -134,10 +143,10 @@ const BiometricAuth = ({ onAuthenticate, onCancel, isEnabled = false, masterKey 
       const credentialData = {
         id: credential.id,
         type: credential.type,
-        rawId: Array.from(new Uint8Array(credential.rawId)),
+        rawId: arrayBufferToBase64url(credential.rawId),
         response: {
-          attestationObject: Array.from(new Uint8Array(credential.response.attestationObject)),
-          clientDataJSON: Array.from(new Uint8Array(credential.response.clientDataJSON))
+          attestationObject: arrayBufferToBase64url(credential.response.attestationObject),
+          clientDataJSON: arrayBufferToBase64url(credential.response.clientDataJSON)
         }
       };
 
@@ -212,40 +221,60 @@ const BiometricAuth = ({ onAuthenticate, onCancel, isEnabled = false, masterKey 
       const userEmail = localStorage.getItem('securevault_user') ? 
         JSON.parse(localStorage.getItem('securevault_user')).email : 'user@securevault.com';
 
-      // Get stored credential data
-      const storedCredential = sessionStorage.getItem(`biometric_credential_${userEmail}`);
-      if (!storedCredential) {
-        throw new Error('No biometric credential found. Please set up biometric authentication first.');
+      // Ask backend for a signed challenge and allowCredentials
+      const challengeResp = await authAPI.biometricChallenge(userEmail);
+      if (!challengeResp.success) {
+        throw new Error(challengeResp.error || 'Failed to obtain biometric challenge');
       }
 
-      const credentialData = JSON.parse(storedCredential);
-      console.log('Using stored credential:', credentialData);
-
-      // Create a simple challenge for local verification
-      const challenge = crypto.getRandomValues(new Uint8Array(32));
-
-      // Create assertion options
-      const assertionOptions = {
-        challenge: challenge,
-        rpId: window.location.hostname || 'localhost',
-        userVerification: 'required',
-        timeout: 120000,
-        allowCredentials: [{
-          id: new Uint8Array(credentialData.rawId),
-          type: credentialData.type,
-          transports: ['internal']
-        }]
+      const options = challengeResp.data;
+      const publicKey = {
+        ...options,
+        challenge: base64urlToArrayBuffer(Array.isArray(options.challenge) ? arrayBufferToBase64url(new Uint8Array(options.challenge).buffer) : options.challenge),
+        allowCredentials: (options.allowCredentials || []).map(c => ({
+          ...c,
+          id: typeof c.id === 'string' ? base64urlToArrayBuffer(c.id) : (Array.isArray(c.id) ? new Uint8Array(c.id).buffer : c.id)
+        }))
       };
 
-      console.log('Getting biometric assertion with options:', assertionOptions);
-
-      // Get assertion from authenticator
-      const assertion = await window.navigator.credentials.get({
-        publicKey: assertionOptions,
-      });
+      // Perform WebAuthn assertion with server-provided challenge
+      const assertion = await window.navigator.credentials.get({ publicKey });
 
       if (!assertion) {
         throw new Error('Biometric verification failed - user may have cancelled');
+      }
+
+      // Send assertion back to server to verify and issue JWT
+      const assertionPayload = {
+        email: userEmail,
+        challenge: options.challenge,
+        assertion: {
+          id: assertion.id,
+          type: assertion.type,
+          rawId: arrayBufferToBase64url(assertion.rawId),
+          response: {
+            authenticatorData: arrayBufferToBase64url(assertion.response.authenticatorData),
+            clientDataJSON: arrayBufferToBase64url(assertion.response.clientDataJSON),
+            signature: arrayBufferToBase64url(assertion.response.signature),
+            userHandle: assertion.response.userHandle ? arrayBufferToBase64url(assertion.response.userHandle) : null
+          }
+        }
+      };
+
+      const loginResp = await authAPI.biometricLogin(assertionPayload);
+      if (!loginResp.success) {
+        throw new Error(loginResp.error || 'Biometric login failed');
+      }
+
+      const tokenData = loginResp.data;
+      const userData = tokenData.user;
+      localStorage.setItem('securevault_token', tokenData.token);
+      localStorage.setItem('securevault_user', JSON.stringify(userData));
+
+      // Restore master key from per-email cache if present
+      const storedMaster = sessionStorage.getItem(`securevault_master_key_${userEmail}`);
+      if (storedMaster) {
+        sessionStorage.setItem('securevault_master_key', storedMaster);
       }
 
       toast.success('Biometric verification successful!');

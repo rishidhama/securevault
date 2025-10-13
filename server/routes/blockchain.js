@@ -30,22 +30,24 @@ router.get('/status', async (req, res) => {
   }
 });
 
-// POST store vault hash on blockchain
+// POST store vault hash on blockchain (accepts merkleRoot or vaultData summary)
 router.post('/store-vault', authenticateToken, async (req, res) => {
   try {
-    const { userId, vaultData } = req.body;
+    const { userId, vaultData, merkleRoot } = req.body;
     
-    if (!userId || !vaultData) {
+    if (!userId || (!vaultData && !merkleRoot)) {
       return res.status(400).json({
         success: false,
-        error: 'Missing required fields: userId, vaultData'
+        error: 'Missing required fields: userId, (vaultData or merkleRoot)'
       });
     }
     
-    // Create hash of vault data
-    const vaultHash = crypto.createHash('sha256')
-      .update(JSON.stringify(vaultData))
-      .digest('hex');
+    // Prefer merkleRoot if provided; else hash the provided vaultData summary
+    const vaultHash = merkleRoot && typeof merkleRoot === 'string' && merkleRoot.length > 0
+      ? merkleRoot
+      : crypto.createHash('sha256')
+        .update(JSON.stringify(vaultData))
+        .digest('hex');
     
     // Store on Sepolia blockchain
     const result = await ethereumService.storeVaultHash(userId, vaultHash);
@@ -53,7 +55,7 @@ router.post('/store-vault', authenticateToken, async (req, res) => {
     if (result.success) {
       res.json({
         success: true,
-        message: 'Vault hash stored on Sepolia blockchain',
+        message: 'Vault integrity root stored on Sepolia blockchain',
         data: {
           userId,
           vaultHash,
@@ -183,15 +185,15 @@ router.get('/activity/:userId', authenticateToken, async (req, res) => {
   }
 });
 
-// POST verify vault integrity
+// POST verify vault integrity (accepts merkleRoot or vaultData summary)
 router.post('/verify', authenticateToken, async (req, res) => {
   try {
-    const { userId, vaultData } = req.body;
+    const { userId, vaultData, merkleRoot } = req.body;
     
-    if (!userId || !vaultData) {
+    if (!userId || (!vaultData && !merkleRoot)) {
       return res.status(400).json({
         success: false,
-        error: 'Missing required fields: userId, vaultData'
+        error: 'Missing required fields: userId, (vaultData or merkleRoot)'
       });
     }
     
@@ -205,10 +207,12 @@ router.post('/verify', authenticateToken, async (req, res) => {
       });
     }
     
-    // Calculate current hash
-    const currentHash = crypto.createHash('sha256')
-      .update(JSON.stringify(vaultData))
-      .digest('hex');
+    // Calculate current hash (prefer provided merkleRoot)
+    const currentHash = merkleRoot && typeof merkleRoot === 'string' && merkleRoot.length > 0
+      ? merkleRoot
+      : crypto.createHash('sha256')
+        .update(JSON.stringify(vaultData))
+        .digest('hex');
     
     // Compare hashes
     const isIntegrityValid = currentHash === storedData.vaultHash;

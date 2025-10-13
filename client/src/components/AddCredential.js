@@ -185,7 +185,7 @@ const AddCredential = ({ onAddCredential, onUpdateCredential, categories, isEdit
         let updateData = { ...formData };
         if (formData.password && formData.password.trim()) {
           // Encrypt new password
-          const encryptedData = encryptionService.encryptPassword(
+          const encryptedData = await encryptionService.encryptPassword(
             formData.password,
             masterKey
           );
@@ -211,7 +211,7 @@ const AddCredential = ({ onAddCredential, onUpdateCredential, categories, isEdit
         // Encrypt password for new credential
         let createData = { ...formData };
         if (formData.password && formData.password.trim()) {
-          const encryptedData = encryptionService.encryptPassword(
+          const encryptedData = await encryptionService.encryptPassword(
             formData.password,
             masterKey
           );

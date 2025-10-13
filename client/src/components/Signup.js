@@ -28,8 +28,14 @@ const Signup = ({ onSignupSuccess }) => {
       if (name.trim().length < 2) {
         throw new Error('Please enter a valid name (min 2 characters)');
       }
-      if (masterKey.length < 8) {
-        throw new Error('Master key must be at least 8 characters');
+      if (masterKey.length < 12) {
+        throw new Error('Master key must be at least 12 characters');
+      }
+      
+      // Check for weak master keys
+      const weakKeys = ['password', '123456', 'masterkey', 'securevault'];
+      if (weakKeys.includes(masterKey.toLowerCase())) {
+        throw new Error('Master key is too weak. Please choose a stronger password.');
       }
       if (masterKey !== confirmKey) {
         throw new Error('Master key and confirmation do not match');
@@ -122,7 +128,7 @@ const Signup = ({ onSignupSuccess }) => {
                   value={masterKey}
                   onChange={(e) => setMasterKey(e.target.value)}
                   required
-                  minLength={8}
+                  minLength={12}
                   disabled={isLoading}
                 />
                 <KeyRound className="w-4 h-4 text-secondary-400 absolute left-3 top-1/2 -translate-y-1/2" />
@@ -135,7 +141,7 @@ const Signup = ({ onSignupSuccess }) => {
                   {showKey ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                 </button>
               </div>
-              <p className="text-xs text-secondary-500 mt-1">Minimum 8 characters. This cannot be recovered if lost.</p>
+              <p className="text-xs text-secondary-500 mt-1">Minimum 12 characters. This cannot be recovered if lost.</p>
             </div>
             <div>
               <label className="block text-sm font-medium text-secondary-700 mb-2">Re-type Master Key</label>

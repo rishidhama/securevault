@@ -70,9 +70,13 @@ const LoginMasterKey = ({ onLoginSuccess }) => {
           if (response.ok) {
             setBiometricEnabled(true);
             return;
-          } else {
-            // Server says biometric is not enabled, clear local data
+          } else if (response.status === 404 || response.status === 400) {
+            // Definitive not-enabled response
             clearIncompleteBiometricData();
+            return;
+          } else {
+            // Transient error (rate limit, server error): keep local state
+            setBiometricEnabled(true);
             return;
           }
         } catch (serverError) {

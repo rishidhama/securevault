@@ -92,14 +92,31 @@ userSchema.index({ createdAt: -1 });
 // Pre-save middleware to hash master key
 userSchema.pre('save', async function(next) {
   if (this.isModified('masterKeyHash')) {
-    this.masterKeyHash = await bcrypt.hash(this.masterKeyHash, 12);
+    // Add server-side salt to prevent rainbow table attacks
+    const serverSalt = process.env.SERVER_SALT || 'securevault-server-salt-2024';
+    const saltedKey = this.masterKeyHash + serverSalt;
+    this.masterKeyHash = await bcrypt.hash(saltedKey, 12);
   }
   next();
 });
 
 // Instance method to validate master key
 userSchema.methods.validateMasterKey = async function(masterKey) {
-  return await bcrypt.compare(masterKey, this.masterKeyHash);
+  // Additional security: validate master key strength
+  if (masterKey.length < 12) {
+    throw new Error('Master key must be at least 12 characters');
+  }
+  
+  // Check against common weak passwords
+  const weakPasswords = ['password', '123456', 'masterkey', 'securevault'];
+  if (weakPasswords.includes(masterKey.toLowerCase())) {
+    throw new Error('Master key is too weak');
+  }
+  
+  // Apply same server-side salt for comparison
+  const serverSalt = process.env.SERVER_SALT || 'securevault-server-salt-2024';
+  const saltedKey = masterKey + serverSalt;
+  return await bcrypt.compare(saltedKey, this.masterKeyHash);
 };
 
 // Instance method to check if account is locked

@@ -36,19 +36,27 @@ app.use(helmet({
   referrerPolicy: { policy: 'strict-origin-when-cross-origin' }
 }));
 
-// Rate limiting
+// Middleware
+// CORS must come BEFORE any middleware that may short-circuit requests (like rate limiters)
+const corsOptions = {
+  origin: process.env.CLIENT_URL || 'http://localhost:3000',
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization']
+};
+app.use(cors(corsOptions));
+// Explicitly handle preflight across the app
+app.options('*', cors(corsOptions));
+
+// Rate limiting (relaxed in development)
 const limiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 100, // limit each IP to 100 requests per windowMs
+  windowMs: 15 * 60 * 1000,
+  max: process.env.NODE_ENV === 'development' ? 1000 : 100,
   message: 'Too many requests from this IP, please try again later.'
 });
-app.use('/api/', limiter);
-
-// Middleware
-app.use(cors({
-  origin: process.env.CLIENT_URL || 'http://localhost:3000',
-  credentials: true
-}));
+if (process.env.NODE_ENV !== 'development') {
+  app.use('/api/', limiter);
+}
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 

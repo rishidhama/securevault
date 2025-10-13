@@ -16,16 +16,39 @@ import CryptoJS from 'crypto-js';
 
 class VaultCrypt {
   constructor() {
-    this.algorithm = 'AES-256-GCM';
-    this.keySize = 256;
+    this.algorithm = 'AES-GCM';
+    this.keySizeBits = 256;
     this.iterations = 310000; // OWASP recommended minimum for PBKDF2
-    this.tagLength = 128; // GCM authentication tag length
-    
-    // Performance tuning: measured 310k iterations take ~200ms on modern devices
-    // This balances security with user experience for mobile devices
+    this.tagLengthBits = 128; // WebCrypto default tag length
+    this._decoder = new TextDecoder();
+    this._encoder = new TextEncoder();
+    this._decryptCache = new Map();
   }
 
+  // Utilities
+  _arrayBufferToBase64(buffer) {
+    const bytes = new Uint8Array(buffer);
+    let binary = '';
+    for (let i = 0; i < bytes.byteLength; i++) {
+      binary += String.fromCharCode(bytes[i]);
+    }
+    return btoa(binary);
+  }
 
+  _base64ToArrayBuffer(base64) {
+    const binary = atob(base64);
+    const bytes = new Uint8Array(binary.length);
+    for (let i = 0; i < binary.length; i++) {
+      bytes[i] = binary.charCodeAt(i);
+    }
+    return bytes.buffer;
+  }
+
+  _randomBytes(length) {
+    const array = new Uint8Array(length);
+    (window.crypto || window.msCrypto).getRandomValues(array);
+    return array;
+  }
 
   /**
    * Generate a random salt for key derivation
@@ -33,8 +56,7 @@ class VaultCrypt {
    */
   generateSalt() {
     try {
-      const wordArray = CryptoJS.lib.WordArray.random(128/8);
-      return wordArray.toString(CryptoJS.enc.Base64);
+      return this._arrayBufferToBase64(this._randomBytes(16));
     } catch (error) {
       console.error('Salt generation error:', error);
       throw new Error('Failed to generate salt');
@@ -42,14 +64,13 @@ class VaultCrypt {
   }
 
   /**
-   * Generate a random initialization vector
-   * @param {number} bytes - Number of bytes for IV (default 16, GCM uses 12)
+   * Generate a random initialization vector (GCM uses 12 bytes)
+   * @param {number} bytes
    * @returns {string} Base64 encoded IV
    */
-  generateIV(bytes = 16) {
+  generateIV(bytes = 12) {
     try {
-      const wordArray = CryptoJS.lib.WordArray.random(bytes);
-      return wordArray.toString(CryptoJS.enc.Base64);
+      return this._arrayBufferToBase64(this._randomBytes(bytes));
     } catch (error) {
       console.error('IV generation error:', error);
       throw new Error('Failed to generate IV');
@@ -57,22 +78,39 @@ class VaultCrypt {
   }
 
   /**
-   * Derive encryption key from master key and salt using PBKDF2
-   * @param {string} masterKey - User's master key
-   * @param {string} salt - Salt for key derivation
-   * @returns {CryptoJS.lib.WordArray} Derived key
+   * Derive a WebCrypto AES-GCM CryptoKey from master key and salt using PBKDF2
+   * @param {string} masterKey
+   * @param {string} saltBase64
+   * @returns {Promise<CryptoKey>}
    */
-  deriveKey(masterKey, salt) {
+  async deriveKey(masterKey, saltBase64) {
     try {
-      // Ensure salt is properly formatted as WordArray
-      const saltWordArray = CryptoJS.enc.Base64.parse(salt);
-      
-      const key = CryptoJS.PBKDF2(masterKey, saltWordArray, {
-        keySize: this.keySize / 32,
-        iterations: this.iterations
-      });
-      
-      return key;
+      const salt = this._base64ToArrayBuffer(saltBase64);
+      const baseKey = await (window.crypto.subtle).importKey(
+        'raw',
+        this._encoder.encode(masterKey),
+        'PBKDF2',
+        false,
+        ['deriveKey']
+      );
+
+      const derivedKey = await (window.crypto.subtle).deriveKey(
+        {
+          name: 'PBKDF2',
+          salt: salt,
+          iterations: this.iterations,
+          hash: 'SHA-256'
+        },
+        baseKey,
+        {
+          name: 'AES-GCM',
+          length: this.keySizeBits
+        },
+        false,
+        ['encrypt', 'decrypt']
+      );
+
+      return derivedKey;
     } catch (error) {
       console.error('Key derivation error:', error);
       throw new Error('Failed to derive encryption key');
@@ -85,50 +123,34 @@ class VaultCrypt {
    * @param {string} masterKey - User's master key
    * @returns {Object} Encrypted data with IV, salt, and auth tag
    */
-  encryptPassword(password, masterKey) {
+  async encryptPassword(password, masterKey) {
     try {
-      // Validate inputs
       if (!password || password.trim() === '') {
         throw new Error('Password is required for encryption');
       }
-      
       if (!masterKey || masterKey.trim() === '') {
         throw new Error('Master key is required for encryption');
       }
 
-      // Generate salt and IV (12 bytes for GCM)
       const salt = this.generateSalt();
-      const iv = this.generateIV(12); // GCM requires 12-byte IV
-      
-      // Validate generated values
-      if (!salt || !iv) {
-        throw new Error('Failed to generate salt or IV');
-      }
-      
-      // Derive key from master key and salt
-      const key = this.deriveKey(masterKey, salt);
-      
-      // Validate derived key
-      if (!key || !key.sigBytes) {
-        throw new Error('Failed to derive encryption key');
-      }
-      
-      // Encrypt the password with GCM mode
-      const encrypted = CryptoJS.AES.encrypt(password, key, {
-        iv: CryptoJS.enc.Base64.parse(iv),
-        mode: CryptoJS.mode.GCM,
-        padding: CryptoJS.pad.NoPadding
-      });
+      const iv = this.generateIV(12);
+
+      const key = await this.deriveKey(masterKey, salt);
+
+      const ciphertextBuffer = await (window.crypto.subtle).encrypt(
+        { name: 'AES-GCM', iv: this._base64ToArrayBuffer(iv), tagLength: this.tagLengthBits },
+        key,
+        this._encoder.encode(password)
+      );
       
       return {
-        encryptedPassword: encrypted.toString(),
+        encryptedPassword: this._arrayBufferToBase64(ciphertextBuffer),
         iv: iv,
-        salt: salt,
-        tag: encrypted.ciphertext.toString(CryptoJS.enc.Base64).slice(-24) // Extract auth tag
+        salt: salt
       };
     } catch (error) {
-      console.error('Encryption error:', error.message);
-      throw new Error(`Failed to encrypt password: ${error.message}`);
+      console.error('Encryption error:', error.message || error);
+      throw new Error(`Failed to encrypt password: ${error.message || 'Unknown error'}`);
     }
   }
 
@@ -143,62 +165,45 @@ class VaultCrypt {
    * @param {string} tag - Authentication tag (optional for backward compatibility)
    * @returns {string} Decrypted password
    */
-  decryptPassword(encryptedPassword, masterKey, iv, salt, tag = null) {
-    try {
-      // Validate inputs
+  // Synchronous accessor that returns from cache (pre-warmed)
+  decryptPassword(encryptedPassword, masterKey, iv, salt) {
       if (!masterKey || masterKey.trim() === '') {
         throw new Error('Master key is required for decryption');
       }
-      
       if (!encryptedPassword || !iv || !salt) {
         throw new Error('Missing encryption parameters');
       }
+    const cacheKey = `${encryptedPassword}|${iv}|${salt}`;
+    if (!this._decryptCache.has(cacheKey)) {
+      throw new Error('Decryption not ready');
+    }
+    return this._decryptCache.get(cacheKey);
+  }
 
-      // Derive key from master key and salt
-      const key = this.deriveKey(masterKey, salt);
-      
-      // Handle backward compatibility for old CBC-encrypted data
-      if (!tag) {
-        // Try CBC mode for legacy data
-        const decrypted = CryptoJS.AES.decrypt(encryptedPassword, key, {
-          iv: CryptoJS.enc.Base64.parse(iv),
-          mode: CryptoJS.mode.CBC,
-          padding: CryptoJS.pad.Pkcs7
-        });
-        
-        const result = decrypted.toString(CryptoJS.enc.Utf8);
-        if (result && result.trim() !== '') {
-          return result;
-        }
-      }
-      
-      // Decrypt with GCM mode (new format)
-      const decrypted = CryptoJS.AES.decrypt(encryptedPassword, key, {
-        iv: CryptoJS.enc.Base64.parse(iv),
-        mode: CryptoJS.mode.GCM,
-        padding: CryptoJS.pad.NoPadding
-      });
-      
-      const result = decrypted.toString(CryptoJS.enc.Utf8);
-      
-      // Validate decryption result
-      if (!result || result.trim() === '') {
-        throw new Error('Decryption resulted in empty string - possible master key mismatch or data corruption');
-      }
-      
-      return result;
-    } catch (error) {
-      console.error('Decryption error:', error.message);
-      
-      // Provide more specific error messages
-      if (error.message.includes('Master key is required')) {
-        throw new Error('Master key is required for decryption');
-      } else if (error.message.includes('Missing encryption parameters')) {
-        throw new Error('Missing encryption parameters');
-      } else if (error.message.includes('empty string')) {
-        throw new Error('Failed to decrypt password. Check your master key.');
-      } else {
-        throw new Error('Failed to decrypt password. Check your master key.');
+  // Async decrypt (used internally for warming cache)
+  async decryptPasswordAsync(encryptedPassword, masterKey, iv, salt) {
+    const key = await this.deriveKey(masterKey, salt);
+    const plaintextBuffer = await (window.crypto.subtle).decrypt(
+      { name: 'AES-GCM', iv: this._base64ToArrayBuffer(iv), tagLength: this.tagLengthBits },
+      key,
+      this._base64ToArrayBuffer(encryptedPassword)
+    );
+    return this._decoder.decode(plaintextBuffer);
+  }
+
+  // Warm cache for a list of credentials to keep UI synchronous
+  async warmDecryptCache(items, masterKey) {
+    if (!Array.isArray(items) || !masterKey) return;
+    for (const item of items) {
+      const { encryptedPassword, iv, salt } = item || {};
+      if (!encryptedPassword || !iv || !salt) continue;
+      const cacheKey = `${encryptedPassword}|${iv}|${salt}`;
+      if (this._decryptCache.has(cacheKey)) continue;
+      try {
+        const plaintext = await this.decryptPasswordAsync(encryptedPassword, masterKey, iv, salt);
+        this._decryptCache.set(cacheKey, plaintext);
+      } catch (e) {
+        // Do not throw during warming; leave entry absent so callers can handle gracefully
       }
     }
   }
@@ -246,11 +251,9 @@ class VaultCrypt {
     }
 
     let password = '';
-    const crypto = window.crypto || window.msCrypto;
-    
     for (let i = 0; i < length; i++) {
       const array = new Uint32Array(1);
-      crypto.getRandomValues(array);
+      (window.crypto || window.msCrypto).getRandomValues(array);
       password += charset.charAt(array[0] % charset.length);
     }
 
@@ -313,7 +316,7 @@ class VaultCrypt {
    * @returns {string} Random string
    */
   generateRandomString(length = 32) {
-    return CryptoJS.lib.WordArray.random(length).toString();
+    return this._arrayBufferToBase64(this._randomBytes(length));
   }
 }
 

@@ -12,11 +12,13 @@ import {
   Info
 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
+import { computeMerkleRoot } from '../utils/merkle';
 
 const BlockchainVerifier = ({ userId, credentials }) => {
   const [verifying, setVerifying] = useState(false);
   const [verificationResult, setVerificationResult] = useState(null);
   const [vaultData, setVaultData] = useState(null);
+  const [merkleRoot, setMerkleRoot] = useState(null);
 
   const generateVaultData = () => {
     if (!credentials || credentials.length === 0) {
@@ -62,8 +64,17 @@ const BlockchainVerifier = ({ userId, credentials }) => {
         return;
       }
 
-      // Verify against blockchain
-      const result = await blockchainAPI.verify(userId, currentVaultData);
+      // Compute client-side Merkle root of canonicalized items
+      try {
+        const root = await computeMerkleRoot(credentials);
+        setMerkleRoot(root);
+      } catch (_) {
+        setMerkleRoot(null);
+      }
+
+      // Verify against blockchain (sends both legacy summary and new merkleRoot for compatibility)
+      const payload = merkleRoot ? { userId, merkleRoot, vaultData: currentVaultData } : { userId, vaultData: currentVaultData };
+      const result = await blockchainAPI.verify(userId, payload);
       setVerificationResult(result.data);
 
       if (result.data.integrityValid) {
@@ -179,6 +190,15 @@ const BlockchainVerifier = ({ userId, credentials }) => {
                 {verificationResult.currentHash}
               </div>
             </div>
+
+            {merkleRoot && (
+              <div>
+                <div className="text-sm font-medium text-secondary-700 mb-1">Client Merkle Root</div>
+                <div className="text-xs text-secondary-600 break-all bg-secondary-50 p-2 rounded">
+                  {merkleRoot}
+                </div>
+              </div>
+            )}
 
             <div>
               <div className="text-sm font-medium text-secondary-700 mb-1">Stored Blockchain Hash</div>
