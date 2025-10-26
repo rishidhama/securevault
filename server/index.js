@@ -41,9 +41,10 @@ app.use(helmet({
 const corsOptions = {
   origin: [
     process.env.CLIENT_URL || 'http://localhost:3000',
-    'https://your-app.vercel.app', // Replace with your actual Vercel URL
-    /\.vercel\.app$/, // Allow all Vercel preview deployments
-    /\.onrender\.com$/ // Allow Render preview deployments
+    /\.vercel\.app$/, // Allow all Vercel deployments
+    /\.onrender\.com$/, // Allow Render deployments
+    'http://localhost:3000', // Local development
+    'https://localhost:3000' // Local development with HTTPS
   ],
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
@@ -174,7 +175,6 @@ app.get('/api/health', (req, res) => {
   res.json({ 
     status: 'OK', 
     message: 'SecureVault API is running',
-
     database: {
       status: dbStatus,
       readyState: mongoose.connection.readyState,
@@ -182,6 +182,15 @@ app.get('/api/health', (req, res) => {
       name: mongoose.connection.name || 'unknown'
     },
     timestamp: new Date().toISOString()
+  });
+});
+
+// Simple test endpoint
+app.get('/api/test', (req, res) => {
+  res.json({ 
+    message: 'Backend is working!',
+    timestamp: new Date().toISOString(),
+    origin: req.get('origin') || 'unknown'
   });
 });
 
