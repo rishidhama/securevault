@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 # SecureVault Research Paper
 
 ## A Zero-Knowledge Password Manager with Blockchain-Anchored Integrity
@@ -97,3 +98,5 @@ For questions about this research, please contact: email address
 ---
 
 *This research paper presents a novel approach to password management that addresses the limitations of existing systems while maintaining practical usability.*
+=======
+>>>>>>> 43f9f2d0f817b27176c7fb0fde55dd4b3011c264
