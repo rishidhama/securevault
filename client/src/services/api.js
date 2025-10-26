@@ -7,7 +7,13 @@ const API_BASE_URL = process.env.REACT_APP_API_URL ||
 
 // Helper function to make API requests
 export const apiRequest = async (endpoint, options = {}) => {
-  const url = `${API_BASE_URL}${endpoint}`;
+  // Ensure no double slashes in URL
+  const baseUrl = API_BASE_URL.endsWith('/') ? API_BASE_URL.slice(0, -1) : API_BASE_URL;
+  const cleanEndpoint = endpoint.startsWith('/') ? endpoint : `/${endpoint}`;
+  const url = `${baseUrl}${cleanEndpoint}`;
+  
+  // Debug logging
+  console.log('API Request:', { baseUrl, cleanEndpoint, url });
   
   // Get JWT token from localStorage for authenticated requests
   const token = localStorage.getItem('securevault_token');
