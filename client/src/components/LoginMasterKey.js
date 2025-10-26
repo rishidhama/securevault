@@ -2,6 +2,26 @@ import React, { useState, useEffect } from 'react';
 import { useLocation, useNavigate, Link } from 'react-router-dom';
 import { Eye, EyeOff, Shield, ArrowLeft, CheckCircle, AlertCircle, Fingerprint } from 'lucide-react';
 import toast from 'react-hot-toast';
+import { authAPI } from '../services/api';
+
+// Helper: base64url <-> ArrayBuffer conversions for WebAuthn
+const base64urlToArrayBuffer = (base64url) => {
+  const padding = '='.repeat((4 - (base64url.length % 4)) % 4);
+  const base64 = (base64url.replace(/-/g, '+').replace(/_/g, '/')) + padding;
+  const raw = atob(base64);
+  const buffer = new ArrayBuffer(raw.length);
+  const bytes = new Uint8Array(buffer);
+  for (let i = 0; i < raw.length; i++) bytes[i] = raw.charCodeAt(i);
+  return buffer;
+};
+
+const arrayBufferToBase64url = (buffer) => {
+  const bytes = new Uint8Array(buffer);
+  let binary = '';
+  for (let i = 0; i < bytes.byteLength; i++) binary += String.fromCharCode(bytes[i]);
+  const base64 = btoa(binary);
+  return base64.replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/g, '');
+};
 
 const LoginMasterKey = ({ onLoginSuccess }) => {
   const location = useLocation();
@@ -227,124 +247,95 @@ const LoginMasterKey = ({ onLoginSuccess }) => {
       return;
     }
 
+    // Require an active session master key before proceeding with biometric unlock
+    const sessionMasterKey = sessionStorage.getItem('securevault_master_key')
+      || sessionStorage.getItem(`securevault_master_key_${emailFromState}`);
+    if (!sessionMasterKey || sessionMasterKey.length < 8) {
+      toast.error('Biometric unlock requires an active session. Please enter your master key once to start a new session.');
+      return;
+    }
+
     try {
       setIsLoading(true);
       setError('');
 
-      // Get stored credential data
-      const storedCredential = sessionStorage.getItem(`biometric_credential_${emailFromState}`);
-      if (!storedCredential) {
-        throw new Error('No biometric credential found. Please set up biometric authentication first.');
+      // Get server-provided challenge and allowCredentials
+      const challengeResp = await authAPI.biometricChallenge(emailFromState);
+      if (!challengeResp.success) {
+        throw new Error(challengeResp.error || 'Failed to request biometric challenge');
       }
 
-      const credentialData = JSON.parse(storedCredential);
-      console.log('Using stored credential:', credentialData);
-
-      // Create a simple challenge for local verification
-      const challenge = crypto.getRandomValues(new Uint8Array(32));
-
-      // Create assertion options
-      const assertionOptions = {
-        challenge: challenge,
-        rpId: window.location.hostname || 'localhost',
-        userVerification: 'required',
-        timeout: 120000,
-        allowCredentials: [{
-          id: new Uint8Array(credentialData.rawId),
-          type: credentialData.type,
-          transports: ['internal']
-        }]
+      const options = challengeResp.data;
+      const publicKey = {
+        ...options,
+        challenge: Array.isArray(options.challenge)
+          ? new Uint8Array(options.challenge).buffer
+          : (typeof options.challenge === 'string'
+              ? base64urlToArrayBuffer(options.challenge)
+              : options.challenge),
+        allowCredentials: (options.allowCredentials || []).map(c => ({
+          ...c,
+          id: Array.isArray(c.id)
+            ? new Uint8Array(c.id).buffer
+            : (typeof c.id === 'string' ? base64urlToArrayBuffer(c.id) : c.id)
+        }))
       };
 
-      console.log('Getting biometric assertion with options:', assertionOptions);
-
-      // Get assertion from authenticator
-      const assertion = await window.navigator.credentials.get({
-        publicKey: assertionOptions,
-      });
-
+      const assertion = await window.navigator.credentials.get({ publicKey });
       if (!assertion) {
         throw new Error('Biometric verification failed - user may have cancelled');
       }
 
+      // Send assertion back for verification
+      const assertionPayload = {
+        email: emailFromState,
+        challenge: options.challenge,
+        assertion: {
+          id: assertion.id,
+          type: assertion.type,
+          rawId: arrayBufferToBase64url(assertion.rawId),
+          response: {
+            authenticatorData: arrayBufferToBase64url(assertion.response.authenticatorData),
+            clientDataJSON: arrayBufferToBase64url(assertion.response.clientDataJSON),
+            signature: arrayBufferToBase64url(assertion.response.signature),
+            userHandle: assertion.response.userHandle ? arrayBufferToBase64url(assertion.response.userHandle) : null
+          }
+        }
+      };
 
-      // Get stored master key
-      let storedMasterKey = sessionStorage.getItem('securevault_master_key') || sessionStorage.getItem(`securevault_master_key_${emailFromState}`);
-      
+      const loginResp = await authAPI.biometricLogin(assertionPayload);
+      if (!loginResp.success) {
+        throw new Error(loginResp.error || 'Biometric login failed');
+      }
+
+      const tokenData = loginResp.data;
+
+      // Restore master key from per-email cache if present
+      const storedMasterKey = sessionStorage.getItem('securevault_master_key') || sessionStorage.getItem(`securevault_master_key_${emailFromState}`);
       if (!storedMasterKey || storedMasterKey.length < 8) {
         throw new Error('No stored master key found. Please log in with your master key to re-setup biometrics.');
       }
 
-      // Get the real user data from the server
-      const tokenResponse = await fetch('http://localhost:5000/api/auth/biometric-auth', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          email: emailFromState,
-          biometricVerified: true
-        })
-      });
+      // Store authentication data
+      localStorage.setItem('securevault_token', tokenData.token);
+      localStorage.setItem('securevault_user', JSON.stringify(tokenData.user));
+      sessionStorage.setItem('securevault_master_key', storedMasterKey);
 
-      if (tokenResponse.ok) {
-        const tokenData = await tokenResponse.json();
-        
-        // Get the real user data from localStorage or create a proper user object
-        const existingUser = localStorage.getItem('securevault_user');
-        let userData;
-        
-        if (existingUser) {
-          try {
-            const parsedUser = JSON.parse(existingUser);
-            // Update the user with the new token but keep the real user data
-            userData = {
-              ...parsedUser,
-              id: parsedUser.id || 'biometric-user-id',
-              email: emailFromState,
-              mfaEnabled: parsedUser.mfaEnabled || false
-            };
-          } catch (e) {
-            // Fallback to token data if parsing fails
-            userData = tokenData.data.user;
-          }
-        } else {
-          // Create a proper user object with the email
-          userData = {
-            id: 'biometric-user-id',
-            email: emailFromState,
-            name: emailFromState.split('@')[0], // Use email prefix as name
-            mfaEnabled: false
-          };
-        }
-        
-        // Store authentication data
-        localStorage.setItem('securevault_token', tokenData.data.token);
-        localStorage.setItem('securevault_user', JSON.stringify(userData));
-        sessionStorage.setItem('securevault_master_key', storedMasterKey);
-        
-        toast.success('Biometric authentication successful!');
-        
-        // Call parent callback if provided
-        if (onLoginSuccess) {
-          onLoginSuccess({
-            user: userData,
-            token: tokenData.data.token,
-            masterKey: storedMasterKey
-          });
-        }
-        
-        // Navigate to dashboard
-        navigate('/');
-      } else {
-        throw new Error('Failed to authenticate with server');
+      toast.success('Biometric authentication successful!');
+
+      if (onLoginSuccess) {
+        onLoginSuccess({
+          user: tokenData.user,
+          token: tokenData.token,
+          masterKey: storedMasterKey
+        });
       }
+
+      navigate('/');
       
     } catch (error) {
       console.error('Biometric authentication failed:', error);
-      
       let errorMessage = 'Biometric authentication failed. Please use your master key instead.';
-      
       if (error.name === 'NotAllowedError') {
         errorMessage = 'Biometric authentication was cancelled or not allowed. Please try again and make sure to allow the browser to access your biometric data.';
       } else if (error.name === 'NotSupportedError') {
@@ -356,7 +347,6 @@ const LoginMasterKey = ({ onLoginSuccess }) => {
       } else if (error.message) {
         errorMessage = error.message;
       }
-      
       toast.error(errorMessage);
       setError(errorMessage);
     } finally {

@@ -314,7 +314,7 @@ router.post('/biometric-challenge', [
 
     const responseData = {
       challenge: Array.from(challenge),
-      rpId: 'localhost', // Use consistent localhost for development
+      rpId: req.hostname || 'localhost',
       userVerification: 'required',
       timeout: 60000,
       allowCredentials: user.biometricCredential ? [{
