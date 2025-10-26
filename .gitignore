@@ -129,3 +129,4 @@ mongodb/
 # Docker
 .dockerignore
 docker-compose.override.yml 
+.vercel
