@@ -77,7 +77,7 @@ const LoginMasterKey = ({ onLoginSuccess }) => {
       if (stored === 'true' && hasCredential && hasMasterKey) {
         // Verify with server that biometric is still enabled
         try {
-          const response = await fetch('http://localhost:5000/api/auth/biometric-challenge', {
+          const response = await fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:5000'}/api/auth/biometric-challenge`, {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
@@ -192,7 +192,7 @@ const LoginMasterKey = ({ onLoginSuccess }) => {
 
       // Send credential to server for storage
       try {
-        const response = await fetch('http://localhost:5000/api/auth/enable-biometric', {
+        const response = await fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:5000'}/api/auth/enable-biometric`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -380,7 +380,7 @@ const LoginMasterKey = ({ onLoginSuccess }) => {
       }
 
              // Call backend login API with correct backend URL
-       const response = await fetch('http://localhost:5000/api/auth/login', {
+       const response = await fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:5000'}/api/auth/login`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

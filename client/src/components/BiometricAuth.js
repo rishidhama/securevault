@@ -159,7 +159,7 @@ const BiometricAuth = ({ onAuthenticate, onCancel, isEnabled = false, masterKey 
       try {
         const token = localStorage.getItem('securevault_token');
         if (token) {
-          const response = await fetch('http://localhost:5000/api/auth/enable-biometric', {
+          const response = await fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:5000'}/api/auth/enable-biometric`, {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
