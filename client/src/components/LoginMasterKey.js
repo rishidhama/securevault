@@ -77,20 +77,11 @@ const LoginMasterKey = ({ onLoginSuccess }) => {
       if (stored === 'true' && hasCredential && hasMasterKey) {
         // Verify with server that biometric is still enabled
         try {
-          const response = await fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:5000'}/api/auth/biometric-challenge`, {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-              email: emailFromState
-            })
-          });
-          
-          if (response.ok) {
-            setBiometricEnabled(true);
-            return;
-          } else if (response.status === 404 || response.status === 400) {
+          await authAPI.biometricChallenge(emailFromState);
+          setBiometricEnabled(true);
+          return;
+        } catch (error) {
+          if (error.message.includes('404') || error.message.includes('400')) {
             // Definitive not-enabled response
             clearIncompleteBiometricData();
             return;
@@ -99,10 +90,6 @@ const LoginMasterKey = ({ onLoginSuccess }) => {
             setBiometricEnabled(true);
             return;
           }
-        } catch (serverError) {
-          // If server check fails, fall back to local check
-          setBiometricEnabled(true);
-          return;
         }
       }
       
@@ -192,23 +179,7 @@ const LoginMasterKey = ({ onLoginSuccess }) => {
 
       // Send credential to server for storage
       try {
-        const response = await fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:5000'}/api/auth/enable-biometric`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${localStorage.getItem('securevault_token')}`
-          },
-          body: JSON.stringify({
-            credentialData: credentialData
-          })
-        });
-
-        if (!response.ok) {
-          const errorData = await response.json().catch(() => ({}));
-          throw new Error(errorData.error || 'Failed to enable biometric authentication on server');
-        }
-
-        const result = await response.json();
+        await authAPI.enableBiometric(credentialData);
       } catch (serverError) {
         console.warn('Failed to store credential on server:', serverError);
         // Continue with local storage only - server storage optional
@@ -379,27 +350,11 @@ const LoginMasterKey = ({ onLoginSuccess }) => {
         throw new Error('Email is required. Please go back and enter your email.');
       }
 
-             // Call backend login API with correct backend URL
-       const response = await fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:5000'}/api/auth/login`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          email: emailFromState,
-          masterKey
-        })
+      // Call backend login API using the API service
+      const data = await authAPI.login({
+        email: emailFromState,
+        masterKey
       });
-
-      const data = await response.json();
-
-      if (!response.ok) {
-        if (response.status === 423) {
-          // Account locked
-          throw new Error(data.error || 'Account is locked due to too many failed attempts');
-        }
-        throw new Error(data.error || 'Invalid email or master key');
-      }
 
       // Check if MFA is required
       if (data.data.user.mfaEnabled) {
