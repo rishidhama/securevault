@@ -39,7 +39,12 @@ app.use(helmet({
 // Middleware
 // CORS must come BEFORE any middleware that may short-circuit requests (like rate limiters)
 const corsOptions = {
-  origin: process.env.CLIENT_URL || 'http://localhost:3000',
+  origin: [
+    process.env.CLIENT_URL || 'http://localhost:3000',
+    'https://your-app.vercel.app', // Replace with your actual Vercel URL
+    /\.vercel\.app$/, // Allow all Vercel preview deployments
+    /\.onrender\.com$/ // Allow Render preview deployments
+  ],
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization']
