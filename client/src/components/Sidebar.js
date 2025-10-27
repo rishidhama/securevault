@@ -22,29 +22,31 @@ const navItems = [
 const Sidebar = ({ onLogout }) => {
   const location = useLocation();
   return (
-    <aside className="h-screen w-56 bg-white border-r border-secondary-200 flex flex-col py-6 px-4 shadow-sm">
-      <div className="mb-8 flex items-center gap-2">
-        <Shield className="w-7 h-7 text-primary-600" />
-        <span className="text-xl font-bold text-gradient">SecureVault</span>
+    <aside className="h-screen w-48 sm:w-56 bg-white border-r border-secondary-200 flex flex-col py-4 sm:py-6 px-3 sm:px-4 shadow-sm">
+      <div className="mb-6 sm:mb-8 flex items-center gap-2">
+        <Shield className="w-6 h-6 sm:w-7 sm:h-7 text-primary-600" />
+        <span className="text-lg sm:text-xl font-bold text-gradient">SecureVault</span>
       </div>
-      <nav className="flex-1 space-y-2">
+      <nav className="flex-1 space-y-1 sm:space-y-2">
         {navItems.map(item => (
           <Link
             key={item.name}
             to={item.to}
-            className={`flex items-center gap-3 px-3 py-2 rounded-lg transition-colors font-medium text-secondary-700 hover:bg-primary-50 hover:text-primary-700 ${location.pathname === item.to ? 'bg-primary-100 text-primary-700' : ''}`}
+            className={`flex items-center gap-2 sm:gap-3 px-2 sm:px-3 py-2 sm:py-2 rounded-lg transition-colors font-medium text-secondary-700 hover:bg-primary-50 hover:text-primary-700 text-sm sm:text-base ${location.pathname === item.to ? 'bg-primary-100 text-primary-700' : ''}`}
           >
             {item.icon}
-            {item.name}
+            <span className="hidden sm:inline">{item.name}</span>
+            <span className="sm:hidden text-xs">{item.name.split(' ')[0]}</span>
           </Link>
         ))}
       </nav>
       <button
         onClick={onLogout}
-        className="flex items-center gap-3 px-3 py-2 rounded-lg text-danger-600 hover:bg-danger-50 font-medium mt-8"
+        className="flex items-center gap-2 sm:gap-3 px-2 sm:px-3 py-2 rounded-lg text-danger-600 hover:bg-danger-50 font-medium mt-6 sm:mt-8 text-sm sm:text-base"
       >
-        <LogOut className="w-5 h-5" />
-        Logout
+        <LogOut className="w-4 h-4 sm:w-5 sm:h-5" />
+        <span className="hidden sm:inline">Logout</span>
+        <span className="sm:hidden text-xs">Exit</span>
       </button>
     </aside>
   );

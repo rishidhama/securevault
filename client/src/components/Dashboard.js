@@ -124,10 +124,10 @@ const Dashboard = ({
           </button>
         )}
         {/* Header */}
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-4">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-4 mb-4">
           <div>
-            <h1 className="text-3xl font-bold text-gradient">Dashboard</h1>
-            <p className="text-secondary-600 mt-1">Manage your secure credentials</p>
+            <h1 className="text-2xl sm:text-3xl font-bold text-gradient">Dashboard</h1>
+            <p className="text-secondary-600 mt-1 text-sm sm:text-base">Manage your secure credentials</p>
             {isCheckingBreaches ? (
               <span className="text-xs text-warning-600 flex items-center gap-1 mt-2"><span className="animate-spin w-3 h-3 border-2 border-warning-600 border-t-transparent rounded-full"></span> Checking for breached passwords...</span>
             ) : (
@@ -140,7 +140,7 @@ const Dashboard = ({
           
           <Link
             to="/add"
-            className="btn-primary inline-flex items-center shadow-glow"
+            className="btn-primary inline-flex items-center justify-center shadow-glow w-full sm:w-auto py-3 sm:py-2"
           >
             <Plus className="w-4 h-4 mr-2" />
             Add Credential
@@ -148,39 +148,39 @@ const Dashboard = ({
         </div>
 
         {/* Stats Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
-          <div className="card-hover animate-slide-up">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6 mb-6">
+          <div className="card-hover animate-slide-up p-4 sm:p-6">
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm font-medium text-secondary-600">Total Credentials</p>
-                <p className="text-2xl font-bold text-secondary-900">{stats.total}</p>
+                <p className="text-xl sm:text-2xl font-bold text-secondary-900">{stats.total}</p>
               </div>
-              <div className="p-3 bg-primary-100 rounded-lg">
-                <Shield className="w-6 h-6 text-primary-600" />
+              <div className="p-2 sm:p-3 bg-primary-100 rounded-lg">
+                <Shield className="w-5 h-5 sm:w-6 sm:h-6 text-primary-600" />
               </div>
             </div>
           </div>
 
-          <div className="card-hover animate-slide-up">
+          <div className="card-hover animate-slide-up p-4 sm:p-6">
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm font-medium text-secondary-600">Favorites</p>
-                <p className="text-2xl font-bold text-secondary-900">{stats.favorites}</p>
+                <p className="text-xl sm:text-2xl font-bold text-secondary-900">{stats.favorites}</p>
               </div>
-              <div className="p-3 bg-warning-100 rounded-lg">
-                <Star className="w-6 h-6 text-warning-600" />
+              <div className="p-2 sm:p-3 bg-warning-100 rounded-lg">
+                <Star className="w-5 h-5 sm:w-6 sm:h-6 text-warning-600" />
               </div>
             </div>
           </div>
 
-          <div className="card-hover animate-slide-up">
+          <div className="card-hover animate-slide-up p-4 sm:p-6 sm:col-span-2 lg:col-span-1">
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm font-medium text-secondary-600">Categories</p>
-                <p className="text-2xl font-bold text-secondary-900">{stats.categories}</p>
+                <p className="text-xl sm:text-2xl font-bold text-secondary-900">{stats.categories}</p>
               </div>
-              <div className="p-3 bg-success-100 rounded-lg">
-                <Tag className="w-6 h-6 text-success-600" />
+              <div className="p-2 sm:p-3 bg-success-100 rounded-lg">
+                <Tag className="w-5 h-5 sm:w-6 sm:h-6 text-success-600" />
               </div>
             </div>
           </div>
@@ -188,8 +188,8 @@ const Dashboard = ({
 
 
         {/* Search and Filters */}
-        <div className="card">
-          <div className="flex flex-col lg:flex-row gap-4">
+        <div className="card p-4 sm:p-6">
+          <div className="flex flex-col sm:flex-row gap-3 sm:gap-4">
             {/* Search */}
             <div className="flex-1">
               <div className="relative">
@@ -199,7 +199,7 @@ const Dashboard = ({
                   placeholder="Search credentials..."
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
-                  className="input pl-10"
+                  className="input pl-10 h-12 sm:h-10 text-base sm:text-sm"
                 />
               </div>
             </div>
@@ -208,7 +208,7 @@ const Dashboard = ({
             <div className="flex gap-2">
               <button
                 onClick={() => setShowFilters(!showFilters)}
-                className={`btn-secondary inline-flex items-center ${showFilters ? 'bg-primary-100 text-primary-700' : ''}`}
+                className={`btn-secondary inline-flex items-center justify-center flex-1 sm:flex-none h-12 sm:h-10 text-sm ${showFilters ? 'bg-primary-100 text-primary-700' : ''}`}
               >
                 <Filter className="w-4 h-4 mr-2" />
                 Filters
@@ -216,7 +216,7 @@ const Dashboard = ({
               
               <button
                 onClick={() => setShowFavorites(!showFavorites)}
-                className={`btn-secondary inline-flex items-center ${showFavorites ? 'bg-warning-100 text-warning-700' : ''}`}
+                className={`btn-secondary inline-flex items-center justify-center flex-1 sm:flex-none h-12 sm:h-10 text-sm ${showFavorites ? 'bg-warning-100 text-warning-700' : ''}`}
               >
                 <Star className="w-4 h-4 mr-2" />
                 Favorites
