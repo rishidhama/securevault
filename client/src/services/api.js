@@ -191,12 +191,31 @@ export const blockchainAPI = {
   })
 };
 
-// Legacy integrity API removed - now using blockchain API
+// Import/Export API endpoints
+export const importExportAPI = {
+  import: (credentials, overwrite = false) => apiRequest('/api/import-export/import', {
+    method: 'POST',
+    body: JSON.stringify({ credentials, overwrite })
+  }),
+  
+  export: (params = {}) => {
+    const queryString = new URLSearchParams(params).toString();
+    return apiRequest(`/api/import-export/export${queryString ? `?${queryString}` : ''}`);
+  },
+  
+  validate: (credentials) => apiRequest('/api/import-export/validate', {
+    method: 'POST',
+    body: JSON.stringify({ credentials })
+  }),
+  
+  stats: () => apiRequest('/api/import-export/stats')
+};
 
 export default {
   auth: authAPI,
   mfa: mfaAPI,
   credentials: credentialsAPI,
   billing: billingAPI,
-  blockchain: blockchainAPI
+  blockchain: blockchainAPI,
+  importExport: importExportAPI
 }; 

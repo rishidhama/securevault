@@ -260,16 +260,12 @@ router.post('/validate', authenticateToken, [
         credErrors.push('Username cannot exceed 200 characters');
       }
 
-      if (!cred.encryptedPassword) {
-        credErrors.push('Encrypted password is required');
-      }
-
-      if (!cred.iv) {
-        credErrors.push('IV is required');
-      }
-
-      if (!cred.salt) {
-        credErrors.push('Salt is required');
+      // Allow either encrypted credentials OR plaintext password (for re-encryption)
+      const hasEncrypted = cred.encryptedPassword && cred.iv && cred.salt;
+      const hasPlaintext = cred.password;
+      
+      if (!hasEncrypted && !hasPlaintext) {
+        credErrors.push('Either encrypted password (with iv and salt) or plaintext password is required');
       }
 
       if (cred.url && cred.url.length > 500) {

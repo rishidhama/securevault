@@ -31,7 +31,8 @@ import BiometricAuth from './BiometricAuth';
 import BackupCodesManager from './BackupCodesManager';
 import BlockchainMonitor from './BlockchainMonitor';
 import BlockchainActivityLog from './BlockchainActivityLog';
-import { authAPI, mfaAPI, billingAPI } from '../services/api';
+import { authAPI, mfaAPI, billingAPI, importExportAPI } from '../services/api';
+import encryptionService from '../utils/encryption';
 
 const SettingsPage = ({ user, masterKey, onLogout, credentials, decryptPassword }) => {
   console.log('SettingsPage rendered with props:', {
@@ -383,6 +384,82 @@ const SettingsPage = ({ user, masterKey, onLogout, credentials, decryptPassword 
     } catch (error) {
       console.error('Export failed:', error);
       toast.error('Failed to export vault');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleImportVault = async (file) => {
+    try {
+      setIsLoading(true);
+      
+      // Read file content
+      const text = await file.text();
+      const importData = JSON.parse(text);
+      
+      if (!importData.credentials || !Array.isArray(importData.credentials)) {
+        throw new Error('Invalid vault file format');
+      }
+      
+      // Check if master key is required for re-encryption
+      const needsReEncryption = importData.credentials.some(
+        cred => cred.password && !cred.encryptedPassword
+      );
+      
+      if (needsReEncryption && !masterKey) {
+        toast.error('Master key is required to import encrypted credentials');
+        return;
+      }
+      
+      // Re-encrypt credentials that have plaintext passwords
+      let credentialsToImport = importData.credentials;
+      if (needsReEncryption) {
+        const reEncryptedCredentials = [];
+        for (const cred of importData.credentials) {
+          if (cred.password && !cred.encryptedPassword) {
+            const encrypted = await encryptionService.encryptPassword(cred.password, masterKey);
+            reEncryptedCredentials.push({
+              ...cred,
+              encryptedPassword: encrypted.encryptedPassword,
+              iv: encrypted.iv,
+              salt: encrypted.salt,
+              password: undefined
+            });
+          } else {
+            reEncryptedCredentials.push(cred);
+          }
+        }
+        credentialsToImport = reEncryptedCredentials;
+      }
+      
+      // Show confirmation dialog
+      const confirmed = window.confirm(
+        `Import ${credentialsToImport.length} credentials from backup? Existing credentials with the same name will be skipped unless you choose to overwrite.`
+      );
+      
+      if (!confirmed) return;
+      
+      // Validate credentials
+      const validation = await importExportAPI.validate(credentialsToImport);
+      
+      if (validation.data.invalid > 0) {
+        toast.error(`${validation.data.invalid} credentials failed validation`);
+        return;
+      }
+      
+      // Import credentials
+      const result = await importExportAPI.import(credentialsToImport, false);
+      
+      if (result.success) {
+        toast.success(`Successfully imported ${result.data.imported} credentials. ${result.data.skipped} were skipped.`);
+        // Refresh the page to show new credentials
+        window.location.reload();
+      } else {
+        throw new Error(result.error || 'Import failed');
+      }
+    } catch (error) {
+      console.error('Import failed:', error);
+      toast.error(error.message || 'Failed to import vault');
     } finally {
       setIsLoading(false);
     }
@@ -855,10 +932,27 @@ const SettingsPage = ({ user, masterKey, onLogout, credentials, decryptPassword 
                   <Download className="w-4 h-4" />
                   {isLoading ? 'Exporting...' : 'Export Vault'}
                 </button>
-                <button className="btn-secondary flex items-center justify-center gap-2 py-3">
+                <button 
+                  onClick={() => document.getElementById('file-input').click()}
+                  className="btn-secondary flex items-center justify-center gap-2 py-3"
+                >
                   <Upload className="w-4 h-4" />
                   Import Vault
                 </button>
+                <input
+                  type="file"
+                  id="file-input"
+                  accept=".json"
+                  style={{ display: 'none' }}
+                  onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    if (file) {
+                      handleImportVault(file);
+                    }
+                    // Reset input
+                    e.target.value = '';
+                  }}
+                />
               </div>
               <div className="bg-primary-50 p-4 rounded-lg">
                 <p className="text-sm text-primary-700">
