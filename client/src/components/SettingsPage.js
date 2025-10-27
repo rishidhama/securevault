@@ -577,35 +577,31 @@ const SettingsPage = ({ user, masterKey, onLogout, credentials, decryptPassword 
     switch (activeSection) {
       case 'account':
         return (
-          <div className="p-4 sm:p-6">
-            <div className="mb-4 sm:mb-6">
-              <h3 className="text-lg sm:text-xl font-semibold text-secondary-900 mb-2">Account Information</h3>
-              <p className="text-sm sm:text-base text-secondary-600">Manage your account details and profile information</p>
+          <div className="p-4">
+            <div className="mb-6">
+              <h3 className="text-xl font-semibold text-secondary-900 mb-2">Account Information</h3>
+              <p className="text-secondary-600">Manage your account details and profile information</p>
             </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6">
-              <div className="space-y-4">
-                <div className="bg-secondary-50 p-4 rounded-lg">
-                  <label className="block text-sm font-medium text-secondary-700 mb-2">Full Name</label>
-                  <p className="text-secondary-900 font-medium">{user?.name || 'Not set'}</p>
-                </div>
-                <div className="bg-secondary-50 p-4 rounded-lg">
-                  <label className="block text-sm font-medium text-secondary-700 mb-2">Email Address</label>
-                  <p className="text-secondary-900 font-medium">{user?.email || 'Not set'}</p>
-                </div>
+            <div className="space-y-4">
+              <div className="bg-secondary-50 p-4 rounded-lg">
+                <label className="block text-sm font-medium text-secondary-700 mb-2">Full Name</label>
+                <p className="text-secondary-900 font-medium">{user?.name || 'Not set'}</p>
               </div>
-              <div className="space-y-4">
-                <div className="bg-secondary-50 p-4 rounded-lg">
-                  <label className="block text-sm font-medium text-secondary-700 mb-2">Member Since</label>
-                  <p className="text-secondary-900 font-medium">
-                    {user?.createdAt ? new Date(user.createdAt).toLocaleDateString() : 'Unknown'}
-                  </p>
-                </div>
-                <div className="bg-secondary-50 p-4 rounded-lg">
-                  <label className="block text-sm font-medium text-secondary-700 mb-2">Last Login</label>
-                  <p className="text-secondary-900 font-medium">
-                    {user?.lastLogin ? new Date(user.lastLogin).toLocaleString() : 'Unknown'}
-                  </p>
-                </div>
+              <div className="bg-secondary-50 p-4 rounded-lg">
+                <label className="block text-sm font-medium text-secondary-700 mb-2">Email Address</label>
+                <p className="text-secondary-900 font-medium">{user?.email || 'Not set'}</p>
+              </div>
+              <div className="bg-secondary-50 p-4 rounded-lg">
+                <label className="block text-sm font-medium text-secondary-700 mb-2">Member Since</label>
+                <p className="text-secondary-900 font-medium">
+                  {user?.createdAt ? new Date(user.createdAt).toLocaleDateString() : 'Unknown'}
+                </p>
+              </div>
+              <div className="bg-secondary-50 p-4 rounded-lg">
+                <label className="block text-sm font-medium text-secondary-700 mb-2">Last Login</label>
+                <p className="text-secondary-900 font-medium">
+                  {user?.lastLogin ? new Date(user.lastLogin).toLocaleString() : 'Unknown'}
+                </p>
               </div>
             </div>
           </div>
@@ -613,14 +609,14 @@ const SettingsPage = ({ user, masterKey, onLogout, credentials, decryptPassword 
 
       case 'security':
         return (
-          <div className="p-4 sm:p-6">
-            <div className="mb-4 sm:mb-6">
-              <h3 className="text-lg sm:text-xl font-semibold text-secondary-900 mb-2">Security Settings</h3>
-              <p className="text-sm sm:text-base text-secondary-600">Manage your master key, biometric authentication, and backup codes</p>
+          <div className="p-4">
+            <div className="mb-6">
+              <h3 className="text-xl font-semibold text-secondary-900 mb-2">Security Settings</h3>
+              <p className="text-secondary-600">Manage your master key, biometric authentication, and backup codes</p>
             </div>
-            <div className="space-y-4 sm:space-y-6">
+            <div className="space-y-6">
               {/* Master Key and MFA Section */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+              <div className="space-y-4">
                 <div className="bg-secondary-50 p-4 rounded-lg">
                   <div className="flex items-center gap-2 mb-2">
                     <Key className="w-4 h-4 text-primary-600" />
@@ -1329,7 +1325,7 @@ const SettingsPage = ({ user, masterKey, onLogout, credentials, decryptPassword 
   };
 
   return (
-    <div className="max-w-7xl mx-auto">
+    <div className="min-h-screen bg-secondary-50">
       {/* Mobile Header */}
       <div className="lg:hidden fixed top-0 left-0 right-0 z-50 bg-white border-b border-secondary-200 px-4 py-3 flex items-center justify-between">
         <div className="flex items-center gap-2">
@@ -1358,29 +1354,32 @@ const SettingsPage = ({ user, masterKey, onLogout, credentials, decryptPassword 
       )}
 
       {/* Desktop Header */}
-      <div className="hidden lg:flex items-center gap-4 mb-8 pt-0">
-        <button
-          onClick={() => navigate('/')}
-          className="btn-secondary hover:bg-secondary-100 transition-colors"
-        >
-          <ArrowLeft className="w-4 h-4" />
-        </button>
-        <div>
-          <h1 className="text-3xl font-bold text-gradient mb-2">Settings</h1>
-          <p className="text-secondary-600">Manage your account and preferences</p>
+      <div className="hidden lg:block max-w-7xl mx-auto px-4 py-8">
+        <div className="flex items-center gap-4 mb-8">
+          <button
+            onClick={() => navigate('/')}
+            className="btn-secondary hover:bg-secondary-100 transition-colors"
+          >
+            <ArrowLeft className="w-4 h-4" />
+          </button>
+          <div>
+            <h1 className="text-3xl font-bold text-gradient mb-2">Settings</h1>
+            <p className="text-secondary-600">Manage your account and preferences</p>
+          </div>
         </div>
       </div>
 
-      <div className="flex gap-8 pt-16 lg:pt-0">
-        {/* Settings Navigation */}
-        <div className={`w-72 flex-shrink-0 fixed lg:relative z-50 transform transition-transform duration-300 ease-in-out ${
-          isMobileMenuOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'
+      {/* Mobile Layout */}
+      <div className="lg:hidden pt-16">
+        {/* Mobile Settings Navigation */}
+        <div className={`fixed inset-y-0 left-0 w-80 bg-white shadow-xl z-50 transform transition-transform duration-300 ease-in-out ${
+          isMobileMenuOpen ? 'translate-x-0' : '-translate-x-full'
         }`}>
-          <div className="h-screen lg:h-auto bg-white lg:card shadow-sm border-secondary-100 overflow-y-auto">
-            <div className="p-4 border-b border-secondary-100">
+          <div className="h-full overflow-y-auto">
+            <div className="p-4 border-b border-secondary-200">
               <h2 className="text-lg font-semibold text-secondary-900">Settings</h2>
             </div>
-            <nav className="p-2">
+            <nav className="p-4 space-y-2">
               {settingsSections.map((section) => (
                 <button
                   key={section.id}
@@ -1388,10 +1387,10 @@ const SettingsPage = ({ user, masterKey, onLogout, credentials, decryptPassword 
                     setActiveSection(section.id);
                     setIsMobileMenuOpen(false);
                   }}
-                  className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 text-left mb-1 ${
+                  className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 text-left ${
                     activeSection === section.id
-                      ? 'bg-primary-50 text-primary-700 border border-primary-200 shadow-sm'
-                      : 'text-secondary-700 hover:bg-secondary-50 hover:text-secondary-900'
+                      ? 'bg-primary-50 text-primary-700 border border-primary-200'
+                      : 'text-secondary-700 hover:bg-secondary-50'
                   }`}
                 >
                   <div className={`p-2 rounded-lg ${
@@ -1406,9 +1405,80 @@ const SettingsPage = ({ user, masterKey, onLogout, credentials, decryptPassword 
                 </button>
               ))}
             </nav>
+            
+            {/* Mobile Danger Zone */}
+            <div className="p-4 border-t border-secondary-200 mt-auto">
+              <div className="bg-gradient-to-br from-danger-50 to-danger-25 rounded-lg p-4">
+                <h3 className="text-sm font-semibold text-danger-700 flex items-center gap-2 mb-3">
+                  <Shield className="w-4 h-4" />
+                  Danger Zone
+                </h3>
+                <div className="space-y-2">
+                  <button
+                    onClick={onLogout}
+                    className="w-full flex items-center justify-center gap-2 px-4 py-2 text-sm text-secondary-700 bg-white border border-secondary-200 rounded-lg hover:bg-secondary-50"
+                  >
+                    <LogOut className="w-4 h-4" />
+                    Logout
+                  </button>
+                  <button
+                    onClick={() => setShowDeleteConfirm(true)}
+                    disabled={isLoading}
+                    className="w-full flex items-center justify-center gap-2 px-4 py-2 text-sm text-white bg-danger-600 rounded-lg hover:bg-danger-700"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                    Delete Account
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
 
-            {/* Danger Zone */}
-            <div className="border-danger-200 bg-gradient-to-br from-danger-50 to-danger-25 mt-6 shadow-sm mx-2 mb-4 lg:mx-0 lg:mb-0">
+        {/* Mobile Content */}
+        <div className="px-4 py-6">
+          <div className="bg-white rounded-lg shadow-sm border border-secondary-200">
+            {renderSectionContent()}
+          </div>
+        </div>
+      </div>
+
+      {/* Desktop Layout */}
+      <div className="hidden lg:block max-w-7xl mx-auto px-4">
+        <div className="flex gap-8">
+          {/* Desktop Settings Navigation */}
+          <div className="w-72 flex-shrink-0">
+            <div className="card shadow-sm border-secondary-100">
+              <div className="p-4 border-b border-secondary-100">
+                <h2 className="text-lg font-semibold text-secondary-900">Settings</h2>
+              </div>
+              <nav className="p-2">
+                {settingsSections.map((section) => (
+                  <button
+                    key={section.id}
+                    onClick={() => setActiveSection(section.id)}
+                    className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 text-left mb-1 ${
+                      activeSection === section.id
+                        ? 'bg-primary-50 text-primary-700 border border-primary-200 shadow-sm'
+                        : 'text-secondary-700 hover:bg-secondary-50 hover:text-secondary-900'
+                    }`}
+                  >
+                    <div className={`p-2 rounded-lg ${
+                      activeSection === section.id ? 'bg-primary-100' : 'bg-secondary-100'
+                    }`}>
+                      {section.icon}
+                    </div>
+                    <div className="flex-1">
+                      <div className="font-semibold text-sm">{section.name}</div>
+                      <div className="text-xs text-secondary-500 mt-0.5">{section.description}</div>
+                    </div>
+                  </button>
+                ))}
+              </nav>
+            </div>
+
+            {/* Desktop Danger Zone */}
+            <div className="card border-danger-200 bg-gradient-to-br from-danger-50 to-danger-25 mt-6 shadow-sm">
               <div className="p-4 border-b border-danger-200">
                 <h3 className="text-lg font-semibold text-danger-700 flex items-center gap-2">
                   <Shield className="w-5 h-5" />
@@ -1434,12 +1504,12 @@ const SettingsPage = ({ user, masterKey, onLogout, credentials, decryptPassword 
               </div>
             </div>
           </div>
-        </div>
 
-        {/* Settings Content */}
-        <div className="flex-1 min-w-0">
-          <div className="card shadow-sm border-secondary-100">
-            {renderSectionContent()}
+          {/* Desktop Settings Content */}
+          <div className="flex-1">
+            <div className="card shadow-sm border-secondary-100">
+              {renderSectionContent()}
+            </div>
           </div>
         </div>
       </div>
