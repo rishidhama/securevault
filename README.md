@@ -2,7 +2,7 @@
 
 A secure password management system combining client-side encryption with blockchain-anchored integrity verification.
 
-## 🎯 Key Features
+## Key Features
 
 - **Zero-Knowledge Architecture**: All encryption/decryption happens client-side
 - **Blockchain Integrity**: Merkle root anchoring for tamper detection
