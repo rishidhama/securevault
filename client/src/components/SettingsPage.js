@@ -418,12 +418,12 @@ const SettingsPage = ({ user, masterKey, onLogout, credentials, decryptPassword 
         for (const cred of importData.credentials) {
           if (cred.password && !cred.encryptedPassword) {
             const encrypted = await encryptionService.encryptPassword(cred.password, masterKey);
+            const { password, ...restCred } = cred;
             reEncryptedCredentials.push({
-              ...cred,
+              ...restCred,
               encryptedPassword: encrypted.encryptedPassword,
               iv: encrypted.iv,
-              salt: encrypted.salt,
-              password: undefined
+              salt: encrypted.salt
             });
           } else {
             reEncryptedCredentials.push(cred);
@@ -439,15 +439,7 @@ const SettingsPage = ({ user, masterKey, onLogout, credentials, decryptPassword 
       
       if (!confirmed) return;
       
-      // Validate credentials
-      const validation = await importExportAPI.validate(credentialsToImport);
-      
-      if (validation.data.invalid > 0) {
-        toast.error(`${validation.data.invalid} credentials failed validation`);
-        return;
-      }
-      
-      // Import credentials
+      // Import credentials (validation happens server-side)
       const result = await importExportAPI.import(credentialsToImport, false);
       
       if (result.success) {
