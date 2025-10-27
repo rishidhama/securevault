@@ -408,33 +408,37 @@ const LoginMasterKey = ({ onLoginSuccess }) => {
   };
 
   return (
-    <div className="min-h-screen gradient-bg flex items-center justify-center p-4">
-      <div className="w-full max-w-md">
+    <div className="min-h-screen gradient-bg flex items-center justify-center p-2 sm:p-4">
+      <div className="w-full max-w-sm sm:max-w-md mx-auto">
         <button 
           onClick={() => navigate('/login')} 
-          className="mb-4 btn-secondary inline-flex items-center"
+          className="mb-3 sm:mb-4 btn-secondary inline-flex items-center text-sm sm:text-base px-3 py-2"
           disabled={isLoading}
         >
-          <ArrowLeft className="w-4 h-4 mr-2" /> Back
+          <ArrowLeft className="w-4 h-4 mr-1 sm:mr-2" /> Back
         </button>
         
-        <div className="text-center mb-6">
-          <div className="inline-flex items-center justify-center w-16 h-16 bg-primary-100 rounded-full mb-3">
-            <Shield className="w-8 h-8 text-primary-600" />
+        <div className="text-center mb-4 sm:mb-6">
+          <div className="inline-flex items-center justify-center w-12 h-12 sm:w-16 sm:h-16 bg-primary-100 rounded-full mb-2 sm:mb-3">
+            <Shield className="w-6 h-6 sm:w-8 sm:h-8 text-primary-600" />
           </div>
-          <h1 className="text-3xl font-bold text-gradient mb-1">Enter Master Key</h1>
-          {emailFromState && (<p className="text-secondary-600">for <span className="font-medium">{emailFromState}</span></p>)}
+          <h1 className="text-2xl sm:text-3xl font-bold text-gradient mb-1">Enter Master Key</h1>
+          {emailFromState && (
+            <p className="text-secondary-600 text-sm sm:text-base">
+              for <span className="font-medium break-all">{emailFromState}</span>
+            </p>
+          )}
         </div>
         
-        <div className="card">
+        <div className="card p-4 sm:p-6">
           <>
-            <form onSubmit={handleSubmit} className="space-y-4">
+            <form onSubmit={handleSubmit} className="space-y-3 sm:space-y-4">
               <div>
                 <label className="block text-sm font-medium text-secondary-700 mb-2">Master Key</label>
                 <div className="relative">
                   <input
                     type={show ? 'text' : 'password'}
-                    className="input pr-10"
+                    className="input pr-10 text-base sm:text-sm h-12 sm:h-10"
                     placeholder="Enter your master key"
                     value={masterKey}
                     onChange={(e) => setMasterKey(e.target.value)}
@@ -444,11 +448,11 @@ const LoginMasterKey = ({ onLoginSuccess }) => {
                   />
                   <button 
                     type="button" 
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-secondary-500" 
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-secondary-500 p-1" 
                     onClick={() => setShow(!show)}
                     disabled={isLoading}
                   >
-                    {show ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                    {show ? <EyeOff className="w-4 h-4 sm:w-5 sm:h-5" /> : <Eye className="w-4 h-4 sm:w-5 sm:h-5" />}
                   </button>
                 </div>
                 {error && (
@@ -478,16 +482,16 @@ const LoginMasterKey = ({ onLoginSuccess }) => {
               
               <button 
                 type="submit" 
-                className="btn-primary w-full"
-                disabled={isLoading}
+                className="btn-primary w-full h-12 sm:h-10 text-base sm:text-sm font-medium"
+                disabled={isLoading || !masterKey.trim()}
               >
                 {isLoading ? (
-                  <>
-                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2" />
-                    Authenticating...
-                  </>
+                  <div className="flex items-center justify-center">
+                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                    Signing in...
+                  </div>
                 ) : (
-                  'Unlock Vault'
+                  'Sign In'
                 )}
               </button>
 
@@ -508,10 +512,10 @@ const LoginMasterKey = ({ onLoginSuccess }) => {
                 <button
                   type="button"
                   onClick={handleBiometricUnlock}
-                  className="btn-secondary w-full flex items-center justify-center gap-2"
+                  className="btn-secondary w-full h-12 sm:h-10 flex items-center justify-center gap-2 text-base sm:text-sm"
                   disabled={isLoading}
                 >
-                  <Fingerprint className="w-4 h-4" />
+                  <Fingerprint className="w-4 h-4 sm:w-5 sm:h-5" />
                   Unlock with Biometrics
                 </button>
                 

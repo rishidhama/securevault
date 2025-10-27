@@ -7,14 +7,14 @@ const Landing = () => {
     <div className="min-h-screen bg-secondary-50">
       {/* Top Nav */}
       <header className="w-full bg-white border-b border-secondary-200">
-        <div className="max-w-6xl mx-auto px-6 py-4 flex items-center justify-between">
+        <div className="max-w-6xl mx-auto px-4 sm:px-6 py-3 sm:py-4 flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <Shield className="w-7 h-7 text-primary-600" />
-            <span className="text-xl font-bold text-gradient">SecureVault</span>
+            <Shield className="w-6 h-6 sm:w-7 sm:h-7 text-primary-600" />
+            <span className="text-lg sm:text-xl font-bold text-gradient">SecureVault</span>
           </div>
-          <nav className="flex items-center gap-3">
-            <Link to="/login" className="btn-secondary">Login</Link>
-            <Link to="/signup" className="btn-primary">Create Account</Link>
+          <nav className="flex items-center gap-2 sm:gap-3">
+            <Link to="/login" className="btn-secondary text-sm px-3 py-2">Login</Link>
+            <Link to="/signup" className="btn-primary text-sm px-3 py-2">Sign Up</Link>
           </nav>
         </div>
       </header>
