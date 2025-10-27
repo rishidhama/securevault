@@ -692,75 +692,74 @@ const SettingsPage = ({ user, masterKey, onLogout, credentials, decryptPassword 
               {/* Biometric and Backup Codes Section */}
               <div className="space-y-4">
                 <div className="bg-white border border-secondary-200 rounded-lg p-4">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-3">
-                      <div className="p-2 bg-primary-100 rounded-lg">
-                        <Fingerprint className="w-4 h-4 text-primary-600" />
-                      </div>
-                      <div>
-                        <div className="flex items-center gap-2">
-                          <label className="text-sm font-medium text-secondary-700">Biometric Authentication</label>
-                          <span className={`text-xs px-2 py-1 rounded-full ${
-                            biometricEnabled 
-                              ? 'bg-green-100 text-green-700 dark:bg-green-900/20 dark:text-green-400' 
-                              : 'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-400'
-                          }`}>
-                            {biometricEnabled ? 'Enabled' : 'Not Setup'}
-                          </span>
-                        </div>
-                        <p className="text-xs text-secondary-500">
-                          {biometricEnabled 
-                            ? 'Use fingerprint or Face ID for quick access' 
-                            : 'Setup fingerprint or Face ID for quick access'
-                          }
-                        </p>
-                      </div>
+                  <div className="flex items-start gap-3 mb-4">
+                    <div className="p-2 bg-primary-100 rounded-lg">
+                      <Fingerprint className="w-5 h-5 text-primary-600" />
                     </div>
-                    <div className="flex items-center gap-2">
-                      {biometricEnabled ? (
-                        <>
-                          <button
-                            onClick={() => setShowBiometricModal(true)}
-                            className="btn-secondary text-sm"
-                          >
-                            <Fingerprint className="w-4 h-4 mr-1" />
-                            Manage Biometrics
-                          </button>
-                          <button
-                            onClick={() => {
-                              // Show confirmation dialog for disabling biometrics
-                              if (window.confirm('Are you sure you want to disable biometric authentication? You will need to use your master key to log in.')) {
-                                const userEmail = user?.email || 'unknown';
-                                sessionStorage.removeItem(`biometric_enabled_${userEmail}`);
-                                sessionStorage.removeItem(`biometric_credential_${userEmail}`);
-                                setBiometricEnabled(false);
-                                toast.success('Biometric authentication disabled');
-                              }
-                            }}
-                            className="btn-danger text-sm"
-                          >
-                            <Trash2 className="w-4 h-4 mr-1" />
-                            Disable
-                          </button>
-                        </>
-                      ) : (
+                    <div className="flex-1">
+                      <div className="flex items-center gap-2 mb-1">
+                        <h4 className="text-sm font-semibold text-secondary-900">Biometric Authentication</h4>
+                        <span className={`text-xs px-2 py-1 rounded-full ${
+                          biometricEnabled 
+                            ? 'bg-green-100 text-green-700' 
+                            : 'bg-gray-100 text-gray-600'
+                        }`}>
+                          {biometricEnabled ? 'Enabled' : 'Not Setup'}
+                        </span>
+                      </div>
+                      <p className="text-xs text-secondary-500">
+                        {biometricEnabled 
+                          ? 'Use fingerprint or Face ID for quick access' 
+                          : 'Setup fingerprint or Face ID for quick access'
+                        }
+                      </p>
+                    </div>
+                  </div>
+                  
+                  {/* Mobile-friendly buttons */}
+                  <div className="space-y-2">
+                    {biometricEnabled ? (
+                      <>
                         <button
                           onClick={() => setShowBiometricModal(true)}
-                          className="btn-primary text-sm"
+                          className="w-full flex items-center justify-center gap-2 px-4 py-3 text-sm font-medium text-secondary-700 bg-secondary-50 border border-secondary-200 rounded-lg hover:bg-secondary-100"
                         >
-                          <Fingerprint className="w-4 h-4 mr-1" />
-                          Setup Biometrics
+                          <Fingerprint className="w-4 h-4" />
+                          Manage Biometrics
                         </button>
-                      )}
-                    </div>
+                        <button
+                          onClick={() => {
+                            if (window.confirm('Are you sure you want to disable biometric authentication? You will need to use your master key to log in.')) {
+                              const userEmail = user?.email || 'unknown';
+                              sessionStorage.removeItem(`biometric_enabled_${userEmail}`);
+                              sessionStorage.removeItem(`biometric_credential_${userEmail}`);
+                              setBiometricEnabled(false);
+                              toast.success('Biometric authentication disabled');
+                            }
+                          }}
+                          className="w-full flex items-center justify-center gap-2 px-4 py-3 text-sm font-medium text-white bg-danger-600 rounded-lg hover:bg-danger-700"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                          Disable Biometrics
+                        </button>
+                      </>
+                    ) : (
+                      <button
+                        onClick={() => setShowBiometricModal(true)}
+                        className="w-full flex items-center justify-center gap-2 px-4 py-3 text-sm font-medium text-white bg-primary-600 rounded-lg hover:bg-primary-700"
+                      >
+                        <Fingerprint className="w-4 h-4" />
+                        Setup Biometrics
+                      </button>
+                    )}
                   </div>
                   
                   {/* Help text for biometrics */}
                   {!biometricEnabled && (
-                    <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-700 rounded-lg p-3">
+                    <div className="mt-4 bg-blue-50 border border-blue-200 rounded-lg p-3">
                       <div className="flex items-start gap-2">
                         <HelpCircle className="w-4 h-4 text-blue-600 mt-0.5 flex-shrink-0" />
-                        <div className="text-sm text-blue-700 dark:text-blue-300">
+                        <div className="text-sm text-blue-700">
                           <p className="font-medium">Setup Biometrics:</p>
                           <p>You'll need to be logged in with your master key to setup biometric authentication. This allows you to unlock your vault using fingerprint or Face ID instead of typing your master key.</p>
                         </div>
