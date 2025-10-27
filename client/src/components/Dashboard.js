@@ -117,9 +117,9 @@ const Dashboard = ({
     <>
       <Tooltip id="breach-tooltip" />
       <div className="space-y-8 animate-fade-in">
-        {/* Back Button (if not on dashboard root) */}
+        {/* Back Button (if not on dashboard root) - Hidden on mobile */}
         {location.pathname !== '/' && (
-          <button onClick={() => navigate(-1)} className="mb-4 btn-secondary flex items-center gap-2">
+          <button onClick={() => navigate(-1)} className="mb-4 btn-secondary flex items-center gap-2 hidden lg:flex">
             <ArrowLeft className="w-4 h-4" /> Back
           </button>
         )}
