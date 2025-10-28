@@ -132,27 +132,53 @@ function App() {
       const storedUser = localStorage.getItem('securevault_user');
       const storedMasterKey = sessionStorage.getItem('securevault_master_key');
 
+      // If no session exists, user needs to login (master key will be entered during login)
+      if (!token || !storedUser) {
+        // No session - this is normal for first visit or after logout
+        // User will be directed to login page where master key is required
+        setIsAuthenticated(false);
+        setIsLoading(false);
+        return;
+      }
 
-      if (token && storedUser && storedMasterKey) {
-        // Verify token is still valid
+      // Session exists - verify token is still valid
+      try {
         const response = await authAPI.profile();
 
         if (response.success) {
           console.log('Token valid, setting authenticated state');
           setUser(response.data.user);
-          setMasterKey(storedMasterKey);
-          setIsAuthenticated(true);
+          
+          // Master key is required for encryption operations
+          // If it exists in sessionStorage, use it; otherwise user must re-enter it
+          if (storedMasterKey) {
+            setMasterKey(storedMasterKey);
+            setIsAuthenticated(true);
+          } else {
+            // Session exists but master key is missing (e.g., after refresh)
+            // User is authenticated but needs to re-enter master key for encryption
+            setIsAuthenticated(true);
+            // Master key will be requested when needed for encryption operations
+          }
         } else {
           console.log('Token invalid, clearing storage');
-          // Token invalid, clear storage
           clearAuthData();
         }
-      } else {
-        console.log('Missing required auth data, not authenticated');
+      } catch (error) {
+        // Handle authentication errors
+        if (error.message && error.message.includes('Authentication required')) {
+          console.log('Authentication token invalid or expired');
+          clearAuthData();
+        } else {
+          console.error('Auth check failed:', error);
+          // On network errors, don't clear auth - user might just be offline
+          // But still set authenticated to false to prevent API calls
+          setIsAuthenticated(false);
+        }
       }
     } catch (error) {
       console.error('Auth check failed:', error);
-      clearAuthData();
+      setIsAuthenticated(false);
     } finally {
       setIsLoading(false);
     }
