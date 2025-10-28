@@ -391,19 +391,27 @@ const LoginMasterKey = ({ onLoginSuccess }) => {
       
       toast.success('Login successful!');
       
-      // Call parent callback if provided
+      // Call parent callback if provided (don't await to prevent blocking)
       if (onLoginSuccess) {
+        // Fire and forget - let it run in background
         onLoginSuccess({
           ...authData,
           masterKey: masterKey // Include the master key in the callback
+        }).catch(err => {
+          console.error('Login success callback error:', err);
+          // Don't block navigation on callback errors
         });
       }
+      
+      // Small delay to ensure state updates before navigation
+      await new Promise(resolve => setTimeout(resolve, 100));
       
       // Navigate to dashboard
       navigate('/');
     } catch (error) {
       console.error('Login completion error:', error);
       toast.error('Failed to complete login');
+      setIsLoading(false); // Ensure loading state is cleared on error
     }
   };
 

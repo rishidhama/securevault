@@ -56,6 +56,7 @@ function App() {
   const [masterKey, setMasterKey] = useState('');
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
+  const [isInitialAuthCheck, setIsInitialAuthCheck] = useState(true);
   const [credentials, setCredentials] = useState([]);
   const [stats, setStats] = useState({ total: 0, favorites: 0, categories: 0 });
   const [categories, setCategories] = useState([]);
@@ -181,6 +182,7 @@ function App() {
       setIsAuthenticated(false);
     } finally {
       setIsLoading(false);
+      setIsInitialAuthCheck(false);
     }
   };
 
@@ -203,12 +205,26 @@ function App() {
 
   const loadData = async () => {
     try {
-      setIsLoading(true);
+      // Only show loading spinner during initial app load, not after login
+      // This allows UI to render immediately after login
+      if (isInitialAuthCheck) {
+        setIsLoading(true);
+      }
       
-      const [credentialsResponse, statsResponse, categoriesResponse] = await Promise.all([
+      // Add timeout to prevent infinite loading (10 seconds)
+      const timeoutPromise = new Promise((_, reject) => 
+        setTimeout(() => reject(new Error('Data loading timeout')), 10000)
+      );
+      
+      const dataPromise = Promise.all([
         credentialsAPI.list(),
         credentialsAPI.stats(),
         credentialsAPI.categories()
+      ]);
+
+      const [credentialsResponse, statsResponse, categoriesResponse] = await Promise.race([
+        dataPromise,
+        timeoutPromise
       ]);
 
       // Handle the response structure correctly
@@ -217,46 +233,69 @@ function App() {
       setStats(statsResponse.data || statsResponse || { total: 0, favorites: 0, categories: 0 });
       setCategories(categoriesResponse.data || categoriesResponse || []);
 
-      // Warm decrypt cache to keep UI synchronous
-      try {
-        await encryptionService.warmDecryptCache(creds, masterKey);
-      } catch (_) {}
+      // Warm decrypt cache to keep UI synchronous (non-blocking)
+      if (masterKey) {
+        try {
+          encryptionService.warmDecryptCache(creds, masterKey).catch(() => {
+            // Silently fail - decryption will happen on-demand
+          });
+        } catch (_) {}
+      }
     } catch (error) {
-      console.error('Failed to load data:', error);
-      // Set empty defaults on error
+      console.error('Failed to load data:', error.message || error);
+      // Set empty defaults on error - don't block the UI
       setCredentials([]);
       setStats({ total: 0, favorites: 0, categories: 0 });
       setCategories([]);
     } finally {
+      // Always clear loading state and mark initial check as complete
       setIsLoading(false);
+      setIsInitialAuthCheck(false);
     }
   };
 
   const handleLoginSuccess = async (authData) => {
-    
-    setUser(authData.user);
-    setMasterKey(authData.masterKey);
-    setIsAuthenticated(true);
-    
-    
-    // Store token in localStorage for API calls
-    if (authData.token) {
-      localStorage.setItem('securevault_token', authData.token);
-    }
-    
-    // Fetch full user profile to get createdAt, lastLogin, etc.
     try {
-      const profileResponse = await authAPI.profile();
-      if (profileResponse.success && profileResponse.data.user) {
-        const fullUserData = { ...authData.user, ...profileResponse.data.user };
-        setUser(fullUserData);
-        console.log('Full user profile loaded:', fullUserData);
+      // Store authentication data immediately
+      if (authData.token) {
+        localStorage.setItem('securevault_token', authData.token);
       }
+      if (authData.user) {
+        localStorage.setItem('securevault_user', JSON.stringify(authData.user));
+      }
+      
+      // Set state immediately for responsive UI
+      setUser(authData.user);
+      setMasterKey(authData.masterKey || '');
+      setIsAuthenticated(true);
+      
+      // Fetch full user profile in background (non-blocking)
+      // Use a timeout to prevent hanging
+      const profilePromise = authAPI.profile();
+      const timeoutPromise = new Promise((_, reject) => 
+        setTimeout(() => reject(new Error('Profile fetch timeout')), 5000)
+      );
+      
+      try {
+        const profileResponse = await Promise.race([profilePromise, timeoutPromise]);
+        if (profileResponse && profileResponse.success && profileResponse.data.user) {
+          const fullUserData = { ...authData.user, ...profileResponse.data.user };
+          setUser(fullUserData);
+          localStorage.setItem('securevault_user', JSON.stringify(fullUserData));
+        }
+      } catch (error) {
+        // If profile fetch fails or times out, continue with login data
+        console.log('Profile fetch skipped (using login data):', error.message);
+      }
+      
+      // The useEffect will handle loading data when isAuthenticated changes
     } catch (error) {
-      console.error('Failed to fetch full user profile:', error);
+      console.error('Login success handler error:', error);
+      // Even if there's an error, we should still be authenticated
+      setUser(authData.user);
+      setMasterKey(authData.masterKey || '');
+      setIsAuthenticated(true);
     }
-    
-    // The useEffect will handle loading data when isAuthenticated changes
   };
 
   const handleSignupSuccess = (authData) => {
@@ -418,7 +457,8 @@ function App() {
     return matchesSearch && matchesCategory && matchesFavorites;
   });
 
-  if (isLoading) {
+  // Only show loading spinner during initial auth check, not during data loading
+  if (isLoading && isInitialAuthCheck) {
     return <LoadingSpinner />;
   }
 
