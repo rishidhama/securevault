@@ -11,6 +11,7 @@ import SettingsPage from './components/SettingsPage';
 import MasterKeyModal from './components/MasterKeyModal';
 import LoadingSpinner from './components/LoadingSpinner';
 import Sidebar from './components/Sidebar';
+import Footer from './components/Footer';
 import Landing from './components/Landing';
 import LoginEmail from './components/LoginEmail';
 import LoginMasterKey from './components/LoginMasterKey';
@@ -475,15 +476,17 @@ function App() {
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
         <Toaster position="top-right" />
+        <Footer />
       </Router>
     );
   }
 
   return (
     <Router>
-      <div className="flex min-h-screen bg-secondary-50">
-        <Sidebar onLogout={handleLogout} />
-        <main className="flex-1 p-4 sm:p-6 lg:p-8 overflow-y-auto pt-16 lg:pt-0">
+      <div className="flex min-h-screen bg-secondary-50 flex-col">
+        <div className="flex flex-1 min-h-0">
+          <Sidebar onLogout={handleLogout} />
+          <main className="flex-1 p-4 sm:p-6 lg:p-8 overflow-y-auto pt-16 lg:pt-0">
           <Breadcrumbs />
           <Routes>
             <Route 
@@ -581,6 +584,7 @@ function App() {
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
         </main>
+        </div>
         <Toaster
           position="top-right"
           toastOptions={{
@@ -604,6 +608,7 @@ function App() {
             },
           }}
         />
+        <Footer />
       </div>
     </Router>
   );
