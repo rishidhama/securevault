@@ -45,7 +45,7 @@ const Footer = () => {
               <span>rishidhama26@gmail.com</span>
             </a>
           </nav>
-          <div className="text-xs text-secondary-400">© {new Date().getFullYear()} SecureVault</div>
+          <div className="text-xs text-secondary-400">© {new Date().getFullYear()} SecureVault · Built by Rishi Dhama</div>
         </div>
       </div>
     </footer>
