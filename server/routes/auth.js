@@ -160,20 +160,9 @@ router.post('/login', validateLogin, async (req, res) => {
         });
       }
 
-      try {
-        const isValidKey = await user.validateMasterKey(masterKey);
-        if (!isValidKey) {
-          await user.incLoginAttempts();
-          
-          return res.status(401).json({
-            success: false,
-            error: 'Invalid email or master key',
-            code: 'INVALID_CREDENTIALS'
-        });
-      }
-    } catch (keyError) {
-      await user.incLoginAttempts();
-        
+      const isValidKey = await user.validateMasterKey(masterKey).catch(() => false);
+      if (!isValidKey) {
+        await user.incLoginAttempts();
         return res.status(401).json({
           success: false,
           error: 'Invalid email or master key',

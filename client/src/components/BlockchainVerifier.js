@@ -25,7 +25,6 @@ const BlockchainVerifier = ({ userId, credentials }) => {
       return null;
     }
 
-    // Create a summary of all credentials for verification
     const vaultSummary = credentials.map(cred => ({
       id: cred._id,
       title: cred.title,
@@ -54,7 +53,6 @@ const BlockchainVerifier = ({ userId, credentials }) => {
     setVerificationResult(null);
 
     try {
-      // Generate current vault data
       const currentVaultData = generateVaultData();
       setVaultData(currentVaultData);
 
@@ -64,16 +62,10 @@ const BlockchainVerifier = ({ userId, credentials }) => {
         return;
       }
 
-      // Compute client-side Merkle root of canonicalized items
-      try {
-        const root = await computeMerkleRoot(credentials);
-        setMerkleRoot(root);
-      } catch (_) {
-        setMerkleRoot(null);
-      }
+      const root = await computeMerkleRoot(credentials).catch(() => null);
+      setMerkleRoot(root);
 
-      // Verify against blockchain (sends both legacy summary and new merkleRoot for compatibility)
-      const payload = merkleRoot ? { userId, merkleRoot, vaultData: currentVaultData } : { userId, vaultData: currentVaultData };
+      const payload = root ? { userId, merkleRoot: root, vaultData: currentVaultData } : { userId, vaultData: currentVaultData };
       const result = await blockchainAPI.verify(userId, payload);
       setVerificationResult(result.data);
 
@@ -98,10 +90,6 @@ const BlockchainVerifier = ({ userId, credentials }) => {
     } finally {
       setVerifying(false);
     }
-  };
-
-  const formatTimestamp = (timestamp) => {
-    return new Date(timestamp).toLocaleString();
   };
 
   return (
@@ -160,7 +148,7 @@ const BlockchainVerifier = ({ userId, credentials }) => {
             {verificationResult.lastUpdated && (
               <div className="flex items-center gap-2 text-sm text-secondary-600">
                 <Clock className="w-4 h-4" />
-                <span>Last blockchain update: {formatTimestamp(verificationResult.lastUpdated)}</span>
+                <span>Last blockchain update: {new Date(verificationResult.lastUpdated).toLocaleString()}</span>
               </div>
             )}
           </div>
@@ -172,7 +160,7 @@ const BlockchainVerifier = ({ userId, credentials }) => {
             <div className="text-sm text-secondary-600">
               <div>User ID: {vaultData.userId}</div>
               <div>Credential Count: {vaultData.credentialCount}</div>
-              <div>Generated: {formatTimestamp(vaultData.timestamp)}</div>
+              <div>Generated: {new Date(vaultData.timestamp).toLocaleString()}</div>
             </div>
           </div>
         )}

@@ -29,16 +29,10 @@ export const apiRequest = async (endpoint, options = {}) => {
     const errorMessage = errorData.error || errorData.message || `API request failed: ${response.status}`;
     
     if (response.status === 401) {
-      if (token) {
-        throw new Error(`Authentication required: ${errorMessage}`);
-      } else {
-        throw new Error(`Please log in to access this resource: ${errorMessage}`);
-      }
-    } else if (response.status === 403) {
-      throw new Error(`Access denied: ${errorMessage}`);
-    } else if (response.status === 503) {
-      throw new Error(`Service unavailable: ${errorMessage}`);
+      throw new Error(token ? `Authentication required: ${errorMessage}` : `Please log in to access this resource: ${errorMessage}`);
     }
+    if (response.status === 403) throw new Error(`Access denied: ${errorMessage}`);
+    if (response.status === 503) throw new Error(`Service unavailable: ${errorMessage}`);
     
     throw new Error(errorMessage);
   }

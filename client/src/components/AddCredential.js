@@ -169,7 +169,6 @@ const AddCredential = ({ onAddCredential, onUpdateCredential, categories, isEdit
     if (Object.keys(errs).length > 0) return;
     setIsLoading(true);
     
-    // Debug: Check if master key is available
     const masterKey = sessionStorage.getItem('securevault_master_key');
     
     if (!masterKey) {

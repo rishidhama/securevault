@@ -28,7 +28,6 @@ const BlockchainDashboard = ({ userId }) => {
     try {
       setRefreshing(true);
       
-      // Check if user is authenticated
       const token = localStorage.getItem('securevault_token');
       if (!token) {
         console.log('User not authenticated, skipping blockchain data fetch');
@@ -37,11 +36,9 @@ const BlockchainDashboard = ({ userId }) => {
         return;
       }
       
-      // Fetch blockchain status
       const statusRes = await blockchainAPI.status();
       setStatus(statusRes.ethereum);
       
-      // Fetch blockchain stats
       try {
         const statsRes = await blockchainAPI.stats();
         setStats(statsRes.data);
@@ -49,7 +46,6 @@ const BlockchainDashboard = ({ userId }) => {
         console.log('Stats not available');
       }
       
-      // Fetch transaction history if user ID is provided
       if (userId) {
         try {
           const historyRes = await blockchainAPI.history(userId);
@@ -80,9 +76,6 @@ const BlockchainDashboard = ({ userId }) => {
     return () => clearInterval(interval);
   }, [userId]);
 
-  const formatTimestamp = (timestamp) => {
-    return new Date(timestamp * 1000).toLocaleString();
-  };
 
   const getStatusIcon = (status) => {
     if (status?.initialized) {
@@ -259,7 +252,7 @@ const BlockchainDashboard = ({ userId }) => {
                       Block #{tx.blockNumber}
                     </div>
                     <div className="text-xs text-secondary-500">
-                      {formatTimestamp(tx.timestamp)}
+                      {new Date(tx.timestamp * 1000).toLocaleString()}
                     </div>
                   </div>
                 </div>

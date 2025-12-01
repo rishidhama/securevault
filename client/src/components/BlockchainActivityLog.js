@@ -25,7 +25,6 @@ const BlockchainActivityLog = ({ userId }) => {
     try {
       setRefreshing(true);
       
-      // Check if user is authenticated
       const token = localStorage.getItem('securevault_token');
       if (!token) {
         console.log('User not authenticated, skipping activity log fetch');
@@ -34,7 +33,6 @@ const BlockchainActivityLog = ({ userId }) => {
         return;
       }
       
-      // Fetch detailed blockchain activity
       if (userId) {
         try {
           const activityRes = await blockchainAPI.activity(userId);
@@ -60,14 +58,10 @@ const BlockchainActivityLog = ({ userId }) => {
   useEffect(() => {
     fetchActivityLog();
     
-    // Auto-refresh every 30 seconds
     const interval = setInterval(fetchActivityLog, 30000);
     return () => clearInterval(interval);
   }, [userId]);
 
-  const formatTimestamp = (timestamp) => {
-    return new Date(timestamp * 1000).toLocaleString();
-  };
 
   const getActionIcon = (action) => {
     const actionMap = {
@@ -176,7 +170,7 @@ const BlockchainActivityLog = ({ userId }) => {
                       
                       <div className="flex items-center gap-2">
                         <Clock className="w-3 h-3" />
-                        <span>{formatTimestamp(activity.timestamp)}</span>
+                        <span>{new Date(activity.timestamp * 1000).toLocaleString()}</span>
                       </div>
                       
                       <div className="flex items-center gap-2">

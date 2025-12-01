@@ -13,26 +13,24 @@ const createBlockchainEvent = async (userId, action, credentialId, credentialDat
       return;
     }
 
+    const credentialMeta = credentialData ? {
+      title: credentialData.title,
+      category: credentialData.category,
+      hasUrl: !!credentialData.url
+    } : null;
+
     const vaultData = {
       action,
       resource: 'CREDENTIAL',
       id: credentialId,
       timestamp: new Date().toISOString(),
-      ...(credentialData && { 
-        title: credentialData.title,
-        category: credentialData.category,
-        hasUrl: !!credentialData.url 
-      })
+      ...credentialMeta
     };
 
     console.log(`Blockchain event: ${action} credential ${credentialId}`, {
       userId,
       vaultData,
-      credentialData: credentialData ? {
-        title: credentialData.title,
-        category: credentialData.category,
-        hasUrl: !!credentialData.url
-      } : null
+      credentialData: credentialMeta
     });
 
     const crypto = require('crypto');
@@ -54,11 +52,7 @@ const createBlockchainEvent = async (userId, action, credentialId, credentialDat
         vaultData,
         vaultHash,
         blockNumber: result.blockNumber,
-        credentialData: credentialData ? {
-          title: credentialData.title,
-          category: credentialData.category,
-          hasUrl: !!credentialData.url
-        } : null
+        credentialData: credentialMeta
       });
     }
     

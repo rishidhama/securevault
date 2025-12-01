@@ -2,24 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Fingerprint, Eye, Shield, AlertTriangle, CheckCircle } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { authAPI } from '../services/api';
-
-const base64urlToArrayBuffer = (base64url) => {
-  const padding = '='.repeat((4 - (base64url.length % 4)) % 4);
-  const base64 = (base64url.replace(/-/g, '+').replace(/_/g, '/')) + padding;
-  const raw = atob(base64);
-  const buffer = new ArrayBuffer(raw.length);
-  const bytes = new Uint8Array(buffer);
-  for (let i = 0; i < raw.length; i++) bytes[i] = raw.charCodeAt(i);
-  return buffer;
-};
-
-const arrayBufferToBase64url = (buffer) => {
-  const bytes = new Uint8Array(buffer);
-  let binary = '';
-  for (let i = 0; i < bytes.byteLength; i++) binary += String.fromCharCode(bytes[i]);
-  const base64 = btoa(binary);
-  return base64.replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/g, '');
-};
+import { base64urlToArrayBuffer, arrayBufferToBase64url } from '../utils/webauthn';
 
 const BiometricAuth = ({ onAuthenticate, onCancel, isEnabled = false, masterKey }) => {
   const [isSupported, setIsSupported] = useState(false);
@@ -28,8 +11,6 @@ const BiometricAuth = ({ onAuthenticate, onCancel, isEnabled = false, masterKey 
   const [error, setError] = useState(null);
   const [supportDetails, setSupportDetails] = useState({
     webAuthn: false,
-    credentials: false,
-    crypto: false,
     biometric: false
   });
 
@@ -38,49 +19,23 @@ const BiometricAuth = ({ onAuthenticate, onCancel, isEnabled = false, masterKey 
   }, []);
 
   const checkBiometricSupport = async () => {
+    const webAuthn = typeof window.PublicKeyCredential !== 'undefined';
+    setSupportDetails({ webAuthn, biometric: false });
+
+    if (!webAuthn) {
+      setIsSupported(false);
+      return;
+    }
+
     try {
-      const details = {
-        webAuthn: typeof window.PublicKeyCredential !== 'undefined',
-        credentials: typeof window.navigator.credentials !== 'undefined',
-        crypto: typeof window.crypto !== 'undefined' && typeof window.crypto.getRandomValues === 'function',
-        biometric: false
-      };
-
-      setSupportDetails(details);
-
-      if (!details.webAuthn) {
-        setIsSupported(false);
-        return;
-      }
-
-      if (typeof window.PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable === 'function') {
-        try {
-          const available = await window.PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable();
-          details.biometric = available;
-          setSupportDetails(details);
-          setIsSupported(available);
-
-          if (available) {
-            const methods = [];
-            if (typeof window.PublicKeyCredential.isConditionalMediationAvailable === 'function') {
-              methods.push('fingerprint');
-            }
-            if (navigator.userAgent.includes('iPhone') || navigator.userAgent.includes('iPad')) {
-              methods.push('faceid');
-            }
-            setAuthMethod(methods[0] || 'fingerprint');
-          }
-        } catch (error) {
-          console.error('Biometric availability check failed:', error);
-          details.biometric = false;
-          setSupportDetails(details);
-          setIsSupported(false);
-        }
-      } else {
-        setIsSupported(false);
+      const available = await window.PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable();
+      setSupportDetails({ webAuthn, biometric: available });
+      setIsSupported(available);
+      if (available) {
+        setAuthMethod('fingerprint');
       }
     } catch (error) {
-      console.error('Biometric support check failed:', error);
+      console.error('Biometric availability check failed:', error);
       setIsSupported(false);
     }
   };
@@ -137,12 +92,10 @@ const BiometricAuth = ({ onAuthenticate, onCancel, isEnabled = false, masterKey 
         }
       };
 
-      // Store credential data
       sessionStorage.setItem(`biometric_credential_${userEmail}`, JSON.stringify(credentialData));
       sessionStorage.setItem(`biometric_enabled_${userEmail}`, 'true');
       sessionStorage.setItem(`securevault_master_key_${userEmail}`, masterKey);
 
-      // Send credential to server for storage
       try {
         const token = localStorage.getItem('securevault_token');
         if (token) {
@@ -204,11 +157,9 @@ const BiometricAuth = ({ onAuthenticate, onCancel, isEnabled = false, masterKey 
     setError(null);
 
     try {
-      // Get the current user email from localStorage
       const userEmail = localStorage.getItem('securevault_user') ? 
         JSON.parse(localStorage.getItem('securevault_user')).email : 'user@securevault.com';
 
-      // Ask backend for a signed challenge and allowCredentials
       const challengeResp = await authAPI.biometricChallenge(userEmail);
       if (!challengeResp.success) {
         throw new Error(challengeResp.error || 'Failed to obtain biometric challenge');
@@ -224,14 +175,11 @@ const BiometricAuth = ({ onAuthenticate, onCancel, isEnabled = false, masterKey 
         }))
       };
 
-      // Perform WebAuthn assertion with server-provided challenge
       const assertion = await window.navigator.credentials.get({ publicKey });
 
       if (!assertion) {
         throw new Error('Biometric verification failed - user may have cancelled');
       }
-
-      // Send assertion back to server to verify and issue JWT
       const assertionPayload = {
         email: userEmail,
         challenge: options.challenge,
@@ -258,7 +206,6 @@ const BiometricAuth = ({ onAuthenticate, onCancel, isEnabled = false, masterKey 
       localStorage.setItem('securevault_token', tokenData.token);
       localStorage.setItem('securevault_user', JSON.stringify(userData));
 
-      // Restore master key from per-email cache if present
       const storedMaster = sessionStorage.getItem(`securevault_master_key_${userEmail}`);
       if (storedMaster) {
         sessionStorage.setItem('securevault_master_key', storedMaster);
@@ -306,14 +253,6 @@ const BiometricAuth = ({ onAuthenticate, onCancel, isEnabled = false, masterKey 
           <div className="flex items-center gap-2">
             <CheckCircle className={`w-4 h-4 ${supportDetails.webAuthn ? 'text-green-500' : 'text-red-500'}`} />
             <span className="text-sm">Web Authentication API: {supportDetails.webAuthn ? 'Supported' : 'Not Supported'}</span>
-          </div>
-          <div className="flex items-center gap-2">
-            <CheckCircle className={`w-4 h-4 ${supportDetails.credentials ? 'text-green-500' : 'text-red-500'}`} />
-            <span className="text-sm">Credentials API: {supportDetails.credentials ? 'Supported' : 'Not Supported'}</span>
-          </div>
-          <div className="flex items-center gap-2">
-            <CheckCircle className={`w-4 h-4 ${supportDetails.crypto ? 'text-green-500' : 'text-red-500'}`} />
-            <span className="text-sm">Crypto API: {supportDetails.crypto ? 'Supported' : 'Not Supported'}</span>
           </div>
           <div className="flex items-center gap-2">
             <CheckCircle className={`w-4 h-4 ${supportDetails.biometric ? 'text-green-500' : 'text-red-500'}`} />

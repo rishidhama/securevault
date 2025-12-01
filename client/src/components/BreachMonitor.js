@@ -32,26 +32,20 @@ const BreachMonitor = ({ credentials, decryptPassword, onUpdateCredential }) => 
     scanInterval: 24 // hours
   });
   
-  // Use ref to track if we've already performed initial scan
   const hasInitialScan = useRef(false);
   const scanInProgress = useRef(false);
 
   useEffect(() => {
     if (settings.autoScan && credentials.length > 0 && !hasInitialScan.current) {
-      // Only run initial scan once when component mounts with credentials
       hasInitialScan.current = true;
       performBreachScan();
     }
-  }, [credentials.length, settings.autoScan]); // Only depend on credentials length and autoScan setting
+  }, [credentials.length, settings.autoScan]);
 
-  // Reset scan state when credentials change significantly
   useEffect(() => {
-    // If credentials length changes significantly, allow a fresh scan
     if (credentials.length > 0 && Object.keys(breachData).length > 0) {
       const credentialIds = credentials.map(c => c._id).sort().join(',');
       const breachIds = Object.keys(breachData).sort().join(',');
-      
-      // If credential IDs don't match, reset scan state
       if (credentialIds !== breachIds) {
         hasInitialScan.current = false;
         setBreachData({});
@@ -60,7 +54,6 @@ const BreachMonitor = ({ credentials, decryptPassword, onUpdateCredential }) => 
     }
   }, [credentials, breachData]);
 
-  // Request notification permission on component mount
   useEffect(() => {
     if (settings.browserNotifications && 'Notification' in window) {
       if (Notification.permission === 'default') {
@@ -70,21 +63,18 @@ const BreachMonitor = ({ credentials, decryptPassword, onUpdateCredential }) => 
   }, [settings.browserNotifications]);
 
   useEffect(() => {
-    // Set up periodic scanning
     if (settings.autoScan) {
       const interval = setInterval(() => {
-        // Only run periodic scan if no manual scan is in progress
         if (!scanInProgress.current && !isScanning) {
           performBreachScan();
         }
-      }, settings.scanInterval * 60 * 60 * 1000); // Convert hours to milliseconds
+      }, settings.scanInterval * 60 * 60 * 1000);
 
       return () => clearInterval(interval);
     }
   }, [settings.autoScan, settings.scanInterval, isScanning]);
 
   const performBreachScan = async () => {
-    // Prevent duplicate scans using ref
     if (scanInProgress.current || isScanning) {
       return;
     }
@@ -128,11 +118,7 @@ const BreachMonitor = ({ credentials, decryptPassword, onUpdateCredential }) => 
 
       setBreachData(newBreachData);
       setLastScan(new Date());
-      
-      // Add new notifications
       setNotifications(prev => [...newNotifications, ...prev]);
-      
-      // Show browser notification if enabled
       if (settings.browserNotifications && newNotifications.length > 0) {
         newNotifications.forEach(notification => {
           if ('Notification' in window && Notification.permission === 'granted') {

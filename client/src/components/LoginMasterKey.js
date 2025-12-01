@@ -3,32 +3,13 @@ import { useLocation, useNavigate, Link } from 'react-router-dom';
 import { Eye, EyeOff, Shield, ArrowLeft, CheckCircle, AlertCircle, Fingerprint } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { authAPI } from '../services/api';
-
-// Helper: base64url <-> ArrayBuffer conversions for WebAuthn
-const base64urlToArrayBuffer = (base64url) => {
-  const padding = '='.repeat((4 - (base64url.length % 4)) % 4);
-  const base64 = (base64url.replace(/-/g, '+').replace(/_/g, '/')) + padding;
-  const raw = atob(base64);
-  const buffer = new ArrayBuffer(raw.length);
-  const bytes = new Uint8Array(buffer);
-  for (let i = 0; i < raw.length; i++) bytes[i] = raw.charCodeAt(i);
-  return buffer;
-};
-
-const arrayBufferToBase64url = (buffer) => {
-  const bytes = new Uint8Array(buffer);
-  let binary = '';
-  for (let i = 0; i < bytes.byteLength; i++) binary += String.fromCharCode(bytes[i]);
-  const base64 = btoa(binary);
-  return base64.replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/g, '');
-};
+import { base64urlToArrayBuffer, arrayBufferToBase64url } from '../utils/webauthn';
 
 const LoginMasterKey = ({ onLoginSuccess }) => {
   const location = useLocation();
   const navigate = useNavigate();
   const emailFromState = location.state?.email || '';
 
-  // State declarations
   const [masterKey, setMasterKey] = useState('');
   const [show, setShow] = useState(false);
   const [error, setError] = useState('');
@@ -142,7 +123,6 @@ const LoginMasterKey = ({ onLoginSuccess }) => {
 
       console.log('Creating biometric credential with options:', credentialOptions);
 
-      // Create credential with user interaction
       const credential = await window.navigator.credentials.create(credentialOptions);
       
       if (!credential) {
@@ -151,7 +131,6 @@ const LoginMasterKey = ({ onLoginSuccess }) => {
 
       console.log('Credential created successfully:', credential);
 
-      // Store credential locally
       const credentialData = {
         id: credential.id,
         type: credential.type,
@@ -162,17 +141,14 @@ const LoginMasterKey = ({ onLoginSuccess }) => {
         }
       };
 
-      // Store credential data
       sessionStorage.setItem(`biometric_credential_${emailFromState}`, JSON.stringify(credentialData));
       sessionStorage.setItem(`biometric_enabled_${emailFromState}`, 'true');
       sessionStorage.setItem(`securevault_master_key_${emailFromState}`, masterKey);
 
-      // Send credential to server for storage
       try {
         await authAPI.enableBiometric(credentialData);
       } catch (serverError) {
         console.warn('Failed to store credential on server:', serverError);
-        // Continue with local storage only - server storage optional
       }
 
       setBiometricEnabled(true);
@@ -208,7 +184,6 @@ const LoginMasterKey = ({ onLoginSuccess }) => {
       return;
     }
 
-    // Require an active session master key before proceeding with biometric unlock
     const sessionMasterKey = sessionStorage.getItem('securevault_master_key')
       || sessionStorage.getItem(`securevault_master_key_${emailFromState}`);
     if (!sessionMasterKey || sessionMasterKey.length < 8) {
@@ -220,7 +195,6 @@ const LoginMasterKey = ({ onLoginSuccess }) => {
       setIsLoading(true);
       setError('');
 
-      // Get server-provided challenge and allowCredentials
       const challengeResp = await authAPI.biometricChallenge(emailFromState);
       if (!challengeResp.success) {
         throw new Error(challengeResp.error || 'Failed to request biometric challenge');
@@ -247,7 +221,6 @@ const LoginMasterKey = ({ onLoginSuccess }) => {
         throw new Error('Biometric verification failed - user may have cancelled');
       }
 
-      // Send assertion back for verification
       const assertionPayload = {
         email: emailFromState,
         challenge: options.challenge,
@@ -277,7 +250,6 @@ const LoginMasterKey = ({ onLoginSuccess }) => {
         throw new Error('No stored master key found. Please log in with your master key to re-setup biometrics.');
       }
 
-      // Store authentication data
       localStorage.setItem('securevault_token', tokenData.token);
       localStorage.setItem('securevault_user', JSON.stringify(tokenData.user));
       sessionStorage.setItem('securevault_master_key', storedMasterKey);
@@ -340,7 +312,6 @@ const LoginMasterKey = ({ onLoginSuccess }) => {
         throw new Error('Email is required. Please go back and enter your email.');
       }
 
-      // Call backend login API using the API service
       const data = await authAPI.login({
         email: emailFromState,
         masterKey

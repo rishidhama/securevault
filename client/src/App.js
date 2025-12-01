@@ -135,13 +135,10 @@ function App() {
         if (response.success) {
           console.log('Token valid, setting authenticated state');
           setUser(response.data.user);
-          
           if (storedMasterKey) {
             setMasterKey(storedMasterKey);
-            setIsAuthenticated(true);
-          } else {
-            setIsAuthenticated(true);
           }
+          setIsAuthenticated(true);
         } else {
           console.log('Token invalid, clearing storage');
           clearAuthData();
@@ -207,10 +204,7 @@ function App() {
       setCategories(categoriesResponse.data || categoriesResponse || []);
 
       if (masterKey) {
-        try {
-          encryptionService.warmDecryptCache(creds, masterKey).catch(() => {
-          });
-        } catch (_) {}
+        encryptionService.warmDecryptCache(creds, masterKey).catch(() => {});
       }
     } catch (error) {
       console.error('Failed to load data:', error.message || error);

@@ -50,21 +50,11 @@ class VaultCrypt {
   }
 
   generateSalt() {
-    try {
-      return this._arrayBufferToBase64(this._randomBytes(16));
-    } catch (error) {
-      console.error('Salt generation error:', error);
-      throw new Error('Failed to generate salt');
-    }
+    return this._arrayBufferToBase64(this._randomBytes(16));
   }
 
   generateIV(bytes = 12) {
-    try {
-      return this._arrayBufferToBase64(this._randomBytes(bytes));
-    } catch (error) {
-      console.error('IV generation error:', error);
-      throw new Error('Failed to generate IV');
-    }
+    return this._arrayBufferToBase64(this._randomBytes(bytes));
   }
 
   /**
@@ -198,7 +188,7 @@ class VaultCrypt {
     try {
       this.decryptPassword(testEncrypted, masterKey, testIV, testSalt);
       return true;
-    } catch (error) {
+    } catch {
       return false;
     }
   }
