@@ -3,7 +3,6 @@ import { Fingerprint, Eye, Shield, AlertTriangle, CheckCircle } from 'lucide-rea
 import toast from 'react-hot-toast';
 import { authAPI } from '../services/api';
 
-// Helper: base64url <-> ArrayBuffer conversions for WebAuthn
 const base64urlToArrayBuffer = (base64url) => {
   const padding = '='.repeat((4 - (base64url.length % 4)) % 4);
   const base64 = (base64url.replace(/-/g, '+').replace(/_/g, '/')) + padding;

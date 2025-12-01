@@ -1,7 +1,7 @@
 const { ethers } = require('ethers');
 
 /**
- * VaultChain - Blockchain Integrity Service
+ *  Blockchain Integrity Service
  * 
  * Provides tamper-evident storage of vault integrity hashes on Ethereum.
  * Uses Sepolia testnet for cost-effective integrity anchoring without
