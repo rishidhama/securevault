@@ -34,11 +34,9 @@ class VaultChain {
         throw new Error('Missing Ethereum configuration: SEPOLIA_RPC_URL, WALLET_PRIVATE_KEY');
       }
 
-      // Connect to Sepolia testnet
       this.provider = new ethers.providers.JsonRpcProvider(this.rpcUrl);
       this.wallet = new ethers.Wallet(this.privateKey, this.provider);
       
-      // Get network info
       const network = await this.provider.getNetwork();
       const balance = await this.wallet.getBalance();
       
@@ -46,7 +44,6 @@ class VaultChain {
       console.log(`Wallet: ${this.wallet.address}`);
       console.log(`Balance: ${ethers.utils.formatEther(balance)} ETH`);
 
-      // Deploy or connect to contract
       if (this.contractAddress) {
         await this.connectToContract();
       } else {
@@ -64,8 +61,6 @@ class VaultChain {
 
   async deployContract() {
     try {
-      
-      // Simple contract for storing password vault hashes
       const contractSource = `
         // SPDX-License-Identifier: MIT
         pragma solidity ^0.8.0;
@@ -93,8 +88,6 @@ class VaultChain {
         }
       `;
 
-      // For now, we'll use a simple contract factory
-      // In production, you'd compile this first
       const contractFactory = new ethers.ContractFactory(
         ['function updateVaultHash(string,string)', 'function getVaultHash(string) view returns(string,uint256,bool)'],
         '0x608060405234801561001057600080fd5b50610150806100206000396000f3fe608060405234801561001057600080fd5b50600436106100365760003560e01c8063a9059cbb1461003b578063c0d7865514610069575b600080fd5b610057600480360381019061005291906100d6565b610087565b604051610060919061012c565b60405180910390f35b6100716100a1565b60405161007e919061012c565b60405180910390f35b6000816000819055506001905092915050565b60008054905090565b600080fd5b6000819050919050565b6100c3816100b0565b81146100ce57600080fd5b50565b6000813590506100e0816100ba565b92915050565b6000602082840312156100fc576100fb6100ab565b5b600061010a848285016100d1565b91505092915050565b60008115159050919050565b61012a81610115565b82525050565b60006020820190506101456000830184610121565b9291505056fea2646970667358221220d6b93f0a8c6c8c8c8c8c8c8c8c8c8c8c8c8c8c8c8c8c8c8c8c8c8c8c8c8c8c64736f6c63430008110033',
@@ -159,7 +152,6 @@ class VaultChain {
         vaultHashPreview: vaultHash.slice(0, 20) + '...'
       });
       
-      // Estimate gas first, then add buffer
       let gasLimit;
       try {
         const estimatedGas = await this.contract.estimateGas.updateVaultHash(userId, vaultHash);

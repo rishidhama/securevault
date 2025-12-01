@@ -6,10 +6,8 @@ const ethereumService = require('../services/ethereum-service');
 const blockchainDecoder = require('../services/blockchain-decoder-persistent');
 const crypto = require('crypto');
 
-// Initialize Ethereum service
 ethereumService.init().catch(console.error);
 
-// GET blockchain status and network info
 router.get('/status', async (req, res) => {
   try {
     const networkInfo = await ethereumService.getNetworkInfo();
@@ -30,7 +28,6 @@ router.get('/status', async (req, res) => {
   }
 });
 
-// POST store vault hash on blockchain (accepts merkleRoot or vaultData summary)
 router.post('/store-vault', authenticateToken, async (req, res) => {
   try {
     const { userId, vaultData, merkleRoot } = req.body;
@@ -42,14 +39,12 @@ router.post('/store-vault', authenticateToken, async (req, res) => {
       });
     }
     
-    // Prefer merkleRoot if provided; else hash the provided vaultData summary
     const vaultHash = merkleRoot && typeof merkleRoot === 'string' && merkleRoot.length > 0
       ? merkleRoot
       : crypto.createHash('sha256')
         .update(JSON.stringify(vaultData))
         .digest('hex');
     
-    // Store on Sepolia blockchain
     const result = await ethereumService.storeVaultHash(userId, vaultHash);
     
     if (result.success) {
@@ -80,7 +75,6 @@ router.post('/store-vault', authenticateToken, async (req, res) => {
   }
 });
 
-// GET vault hash from blockchain
 router.get('/vault/:userId', authenticateToken, async (req, res) => {
   try {
     const { userId } = req.params;
@@ -112,17 +106,14 @@ router.get('/vault/:userId', authenticateToken, async (req, res) => {
   }
 });
 
-// GET transaction history for a user
 router.get('/history/:userId', authenticateToken, async (req, res) => {
   try {
     const { userId } = req.params;
     
-    // If MongoDB is not connected, return empty history gracefully
     if (mongoose.connection.readyState !== 1) {
       return res.json({ success: true, data: [] });
     }
     
-    // Get transaction history from database
     const history = await blockchainDecoder.getUserTransactionHistory(userId);
     
     res.json({
@@ -143,20 +134,16 @@ router.get('/history/:userId', authenticateToken, async (req, res) => {
   }
 });
 
-// GET detailed blockchain activity for a user
 router.get('/activity/:userId', authenticateToken, async (req, res) => {
   try {
     const { userId } = req.params;
     
-    // If MongoDB is not connected, return empty activity gracefully
     if (mongoose.connection.readyState !== 1) {
       return res.json({ success: true, data: [] });
     }
     
-    // Get transaction history from database
     const history = await blockchainDecoder.getUserTransactionHistory(userId);
     
-    // Enhance with operation details
     const enhancedActivities = history.map(tx => {
       return {
         txHash: tx.txHash,
@@ -185,7 +172,6 @@ router.get('/activity/:userId', authenticateToken, async (req, res) => {
   }
 });
 
-// POST verify vault integrity (accepts merkleRoot or vaultData summary)
 router.post('/verify', authenticateToken, async (req, res) => {
   try {
     const { userId, vaultData, merkleRoot } = req.body;
@@ -197,7 +183,6 @@ router.post('/verify', authenticateToken, async (req, res) => {
       });
     }
     
-    // Get stored hash from blockchain
     const storedData = await ethereumService.getVaultHash(userId);
     
     if (!storedData.exists) {
@@ -207,14 +192,12 @@ router.post('/verify', authenticateToken, async (req, res) => {
       });
     }
     
-    // Calculate current hash (prefer provided merkleRoot)
     const currentHash = merkleRoot && typeof merkleRoot === 'string' && merkleRoot.length > 0
       ? merkleRoot
       : crypto.createHash('sha256')
         .update(JSON.stringify(vaultData))
         .digest('hex');
     
-    // Compare hashes
     const isIntegrityValid = currentHash === storedData.vaultHash;
     
     res.json({
@@ -239,7 +222,6 @@ router.post('/verify', authenticateToken, async (req, res) => {
   }
 });
 
-// GET blockchain network statistics
 router.get('/stats', authenticateToken, async (req, res) => {
   try {
     const networkInfo = await ethereumService.getNetworkInfo();

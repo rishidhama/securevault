@@ -1,7 +1,7 @@
 import CryptoJS from 'crypto-js';
 
 /**
- * VaultCrypt - Client-Side Encryption Engine
+ * Client-Side Encryption Engine
  * 
  * Implements zero-knowledge password vault encryption where the server never
  * sees plaintext data. Uses AES-GCM for authenticated encryption to prevent
@@ -25,7 +25,6 @@ class VaultCrypt {
     this._decryptCache = new Map();
   }
 
-  // Utilities
   _arrayBufferToBase64(buffer) {
     const bytes = new Uint8Array(buffer);
     let binary = '';
@@ -50,10 +49,6 @@ class VaultCrypt {
     return array;
   }
 
-  /**
-   * Generate a random salt for key derivation
-   * @returns {string} Base64 encoded salt
-   */
   generateSalt() {
     try {
       return this._arrayBufferToBase64(this._randomBytes(16));
@@ -63,11 +58,6 @@ class VaultCrypt {
     }
   }
 
-  /**
-   * Generate a random initialization vector (GCM uses 12 bytes)
-   * @param {number} bytes
-   * @returns {string} Base64 encoded IV
-   */
   generateIV(bytes = 12) {
     try {
       return this._arrayBufferToBase64(this._randomBytes(bytes));
@@ -165,7 +155,6 @@ class VaultCrypt {
    * @param {string} tag - Authentication tag (optional for backward compatibility)
    * @returns {string} Decrypted password
    */
-  // Synchronous accessor that returns from cache (pre-warmed)
   decryptPassword(encryptedPassword, masterKey, iv, salt) {
       if (!masterKey || masterKey.trim() === '') {
         throw new Error('Master key is required for decryption');
@@ -180,7 +169,6 @@ class VaultCrypt {
     return this._decryptCache.get(cacheKey);
   }
 
-  // Async decrypt (used internally for warming cache)
   async decryptPasswordAsync(encryptedPassword, masterKey, iv, salt) {
     const key = await this.deriveKey(masterKey, salt);
     const plaintextBuffer = await (window.crypto.subtle).decrypt(
@@ -191,7 +179,6 @@ class VaultCrypt {
     return this._decoder.decode(plaintextBuffer);
   }
 
-  // Warm cache for a list of credentials to keep UI synchronous
   async warmDecryptCache(items, masterKey) {
     if (!Array.isArray(items) || !masterKey) return;
     for (const item of items) {
@@ -203,19 +190,10 @@ class VaultCrypt {
         const plaintext = await this.decryptPasswordAsync(encryptedPassword, masterKey, iv, salt);
         this._decryptCache.set(cacheKey, plaintext);
       } catch (e) {
-        // Do not throw during warming; leave entry absent so callers can handle gracefully
       }
     }
   }
 
-  /**
-   * Validate master key by attempting to decrypt a test string
-   * @param {string} masterKey - Master key to validate
-   * @param {string} testEncrypted - Test encrypted string
-   * @param {string} testIV - Test IV
-   * @param {string} testSalt - Test salt
-   * @returns {boolean} True if master key is valid
-   */
   validateMasterKey(masterKey, testEncrypted, testIV, testSalt) {
     try {
       this.decryptPassword(testEncrypted, masterKey, testIV, testSalt);
@@ -225,12 +203,6 @@ class VaultCrypt {
     }
   }
 
-  /**
-   * Generate a strong password
-   * @param {number} length - Length of password (default: 16)
-   * @param {Object} options - Password generation options
-   * @returns {string} Generated password
-   */
   generatePassword(length = 16, options = {}) {
     const {
       includeUppercase = true,
@@ -260,27 +232,19 @@ class VaultCrypt {
     return password;
   }
 
-  /**
-   * Calculate password strength score
-   * @param {string} password - Password to evaluate
-   * @returns {Object} Strength information
-   */
   calculatePasswordStrength(password) {
     let score = 0;
     const feedback = [];
 
-    // Length check
     if (password.length >= 8) score += 1;
     if (password.length >= 12) score += 1;
     if (password.length >= 16) score += 1;
 
-    // Character variety checks
     if (/[a-z]/.test(password)) score += 1;
     if (/[A-Z]/.test(password)) score += 1;
     if (/[0-9]/.test(password)) score += 1;
     if (/[^A-Za-z0-9]/.test(password)) score += 1;
 
-    // Additional checks
     if (password.length < 8) feedback.push('Password should be at least 8 characters long');
     if (!/[a-z]/.test(password)) feedback.push('Add lowercase letters');
     if (!/[A-Z]/.test(password)) feedback.push('Add uppercase letters');
@@ -301,20 +265,10 @@ class VaultCrypt {
     };
   }
 
-  /**
-   * Hash a string using SHA-256 (for non-reversible operations)
-   * @param {string} input - String to hash
-   * @returns {string} SHA-256 hash
-   */
   hashString(input) {
     return CryptoJS.SHA256(input).toString();
   }
 
-  /**
-   * Generate a secure random string
-   * @param {number} length - Length of string
-   * @returns {string} Random string
-   */
   generateRandomString(length = 32) {
     return this._arrayBufferToBase64(this._randomBytes(length));
   }
@@ -348,7 +302,6 @@ async function checkPasswordBreach(password) {
   }
 }
 
-// Create singleton instance
 const vaultCrypt = new VaultCrypt();
 
 export default vaultCrypt;

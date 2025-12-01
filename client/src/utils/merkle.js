@@ -1,6 +1,3 @@
-// Simple Merkle tree (SHA-256) over canonicalized credential blobs
-// Uses SubtleCrypto for hashing; returns hex root
-
 const encoder = new TextEncoder();
 
 async function sha256Hex(data) {
@@ -19,7 +16,6 @@ function canonicalizeItem(cred) {
       ? undefined
       : undefined
   };
-  // For metadataHash, hash minimal metadata fields to avoid PII exposure in leaves
   const metadata = {
     title: cred.title || '',
     username: cred.username || '',
@@ -53,9 +49,7 @@ export async function computeMerkleRoot(credentials) {
   if (!Array.isArray(credentials) || credentials.length === 0) {
     return null;
   }
-  // Compute leaf hashes
   const leaves = await Promise.all(credentials.map(leafHash));
-  // Build up the tree
   let level = leaves;
   while (level.length > 1) {
     const next = [];

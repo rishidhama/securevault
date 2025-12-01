@@ -68,7 +68,6 @@ const AddCredential = ({ onAddCredential, onUpdateCredential, categories, isEdit
       try {
         setBlockchainLoading(true);
         
-        // Check if user is authenticated
         const token = localStorage.getItem('securevault_token');
         if (!token) {
           console.log('User not authenticated, skipping blockchain status fetch');
@@ -90,7 +89,6 @@ const AddCredential = ({ onAddCredential, onUpdateCredential, categories, isEdit
     fetchBlockchainStatus();
   }, []);
 
-  // Prefill form if editing
   React.useEffect(() => {
     if (isEdit && id && credentials) {
       const cred = credentials.find(c => c._id === id);

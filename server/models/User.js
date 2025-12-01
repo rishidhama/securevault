@@ -16,8 +16,6 @@ const userSchema = new mongoose.Schema({
     trim: true,
     maxlength: [100, 'Name cannot exceed 100 characters']
   },
-  // We don't store the master key - it's client-side only
-  // But we store a hash of it for validation
   masterKeyHash: {
     type: String,
     required: [true, 'Master key hash is required']
@@ -57,7 +55,6 @@ const userSchema = new mongoose.Schema({
     type: Date,
     default: Date.now
   },
-  // Billing fields
   stripeCustomerId: {
     type: String,
     index: true
@@ -69,7 +66,6 @@ const userSchema = new mongoose.Schema({
     currentPeriodEnd: Date,
     cancelAtPeriodEnd: { type: Boolean, default: false }
   },
-  // User preferences
   preferences: {
     notifications: {
       securityAlerts: { type: Boolean, default: true },
@@ -85,14 +81,11 @@ const userSchema = new mongoose.Schema({
   timestamps: true
 });
 
-// Indexes
 userSchema.index({ email: 1 });
 userSchema.index({ createdAt: -1 });
 
-// Pre-save middleware to hash master key
 userSchema.pre('save', async function(next) {
   if (this.isModified('masterKeyHash')) {
-    // Add server-side salt to prevent rainbow table attacks
     const serverSalt = process.env.SERVER_SALT || 'securevault-server-salt-2024';
     const saltedKey = this.masterKeyHash + serverSalt;
     this.masterKeyHash = await bcrypt.hash(saltedKey, 12);
@@ -100,33 +93,26 @@ userSchema.pre('save', async function(next) {
   next();
 });
 
-// Instance method to validate master key
 userSchema.methods.validateMasterKey = async function(masterKey) {
-  // Additional security: validate master key strength
   if (masterKey.length < 12) {
     throw new Error('Master key must be at least 12 characters');
   }
   
-  // Check against common weak passwords
   const weakPasswords = ['password', '123456', 'masterkey', 'securevault'];
   if (weakPasswords.includes(masterKey.toLowerCase())) {
     throw new Error('Master key is too weak');
   }
   
-  // Apply same server-side salt for comparison
   const serverSalt = process.env.SERVER_SALT || 'securevault-server-salt-2024';
   const saltedKey = masterKey + serverSalt;
   return await bcrypt.compare(saltedKey, this.masterKeyHash);
 };
 
-// Instance method to check if account is locked
 userSchema.methods.isLocked = function() {
   return !!(this.lockUntil && this.lockUntil > Date.now());
 };
 
-// Instance method to increment login attempts
 userSchema.methods.incLoginAttempts = function() {
-  // If we have a previous lock that has expired, restart at 1
   if (this.lockUntil && this.lockUntil < Date.now()) {
     return this.updateOne({
       $unset: { lockUntil: 1 },
@@ -136,7 +122,6 @@ userSchema.methods.incLoginAttempts = function() {
   
   const updates = { $inc: { loginAttempts: 1 } };
   
-  // Lock account after 5 failed attempts for 2 hours
   if (this.loginAttempts + 1 >= 5 && !this.isLocked()) {
     updates.$set = { lockUntil: Date.now() + 2 * 60 * 60 * 1000 };
   }
@@ -144,18 +129,16 @@ userSchema.methods.incLoginAttempts = function() {
   return this.updateOne(updates);
 };
 
-// Instance method to reset login attempts
 userSchema.methods.resetLoginAttempts = function() {
   return this.updateOne({
     $unset: { loginAttempts: 1, lockUntil: 1 }
   });
 };
 
-// Static method to find user by email
 userSchema.statics.findByEmail = function(email, includeMfaSecret = false) {
   const query = this.findOne({ email: email.toLowerCase() });
   if (includeMfaSecret) {
-    return query.select('+mfaSecret'); // This will include all other fields including mfaBackupCodes
+    return query.select('+mfaSecret');
   }
   return query;
 };

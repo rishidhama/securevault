@@ -1,7 +1,6 @@
 const crypto = require('crypto');
 const mongoose = require('mongoose');
 
-// Define schema for blockchain operations
 const blockchainOperationSchema = new mongoose.Schema({
   txHash: { type: String, required: true, unique: true },
   userId: { type: String, required: true },
@@ -28,9 +27,6 @@ class PersistentBlockchainDecoder {
     this.operationCache = new Map(); // Cache for decoded operations
   }
 
-  /**
-   * Store operation details in database
-   */
   async storeOperationDetails(txHash, operationData) {
     try {
       const operationWithTimestamp = {
@@ -38,7 +34,6 @@ class PersistentBlockchainDecoder {
         storedAt: new Date()
       };
 
-      // Store in database idempotently (avoid duplicate key errors on txHash)
       await BlockchainOperation.findOneAndUpdate(
         { txHash },
         {
@@ -57,7 +52,6 @@ class PersistentBlockchainDecoder {
         { upsert: true, new: false, setDefaultsOnInsert: true }
       );
 
-      // Also store in cache for quick access
       this.operationCache.set(txHash, operationWithTimestamp);
 
       console.log(`Stored operation details for txHash: ${txHash}`);
@@ -69,16 +63,10 @@ class PersistentBlockchainDecoder {
     }
   }
 
-  /**
-   * Get stored operation details
-   */
   getOperationDetails(txHash) {
     return this.operationCache.get(txHash);
   }
 
-  /**
-   * Get transaction history for a user from database
-   */
   async getUserTransactionHistory(userId) {
     try {
       const operations = await BlockchainOperation.find({ userId })
@@ -104,9 +92,6 @@ class PersistentBlockchainDecoder {
     }
   }
 
-  /**
-   * Get all operations (for debugging)
-   */
   async getAllOperations() {
     try {
       const operations = await BlockchainOperation.find().sort({ storedAt: -1 });
@@ -118,9 +103,6 @@ class PersistentBlockchainDecoder {
     }
   }
 
-  /**
-   * Clear old cache entries
-   */
   clearOldCacheEntries(maxAge = 24 * 60 * 60 * 1000) { // 24 hours
     const now = Date.now();
     for (const [txHash, operation] of this.operationCache.entries()) {

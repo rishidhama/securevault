@@ -4,7 +4,6 @@ const Credential = require('../models/Credential');
 const { authenticateToken } = require('./auth');
 const router = express.Router();
 
-// Import credentials from JSON file
 router.post('/import', authenticateToken, [
   body('credentials')
     .isArray({ min: 1 })
@@ -43,12 +42,10 @@ router.post('/import', authenticateToken, [
     let skippedCount = 0;
     let importErrors = [];
 
-    // Process each credential
     for (let i = 0; i < credentials.length; i++) {
       const cred = credentials[i];
       
       try {
-        // Check if credential already exists (by title and username for this user)
         const existing = await Credential.findOne({
           title: cred.title,
           username: cred.username,
@@ -61,7 +58,6 @@ router.post('/import', authenticateToken, [
         }
 
         if (existing && overwrite) {
-          // Update existing credential
           await Credential.findByIdAndUpdate(existing._id, {
             encryptedPassword: cred.encryptedPassword,
             iv: cred.iv,
@@ -74,7 +70,6 @@ router.post('/import', authenticateToken, [
             lastModified: new Date()
           });
         } else {
-          // Create new credential
           const newCredential = new Credential({
             ...cred,
             userId: userId,
@@ -114,23 +109,19 @@ router.post('/import', authenticateToken, [
   }
 });
 
-// Export credentials to JSON
 router.get('/export', authenticateToken, async (req, res) => {
   try {
     const { format = 'json', category, includePasswords = false } = req.query;
     const userId = req.user.userId;
 
-    // Build query
     let query = { userId: userId };
     if (category && category !== 'all') {
       query.category = category;
     }
 
-    // Get credentials
     const credentials = await Credential.find(query).sort({ createdAt: -1 });
 
     if (format === 'csv') {
-      // Export as CSV
       const csvHeaders = ['Title', 'Username', 'Password', 'URL', 'Category', 'Notes', 'Tags', 'Favorite', 'Created', 'Modified'];
       let csvContent = csvHeaders.join(',') + '\n';
 
@@ -154,7 +145,6 @@ router.get('/export', authenticateToken, async (req, res) => {
       res.setHeader('Content-Disposition', `attachment; filename="securevault-export-${new Date().toISOString().split('T')[0]}.csv"`);
       res.send(csvContent);
     } else {
-      // Export as JSON
       const exportData = {
         exportInfo: {
           timestamp: new Date().toISOString(),
@@ -191,7 +181,6 @@ router.get('/export', authenticateToken, async (req, res) => {
   }
 });
 
-// Get import/export statistics
 router.get('/stats', authenticateToken, async (req, res) => {
   try {
     const userId = req.user.userId;
@@ -222,7 +211,6 @@ router.get('/stats', authenticateToken, async (req, res) => {
   }
 });
 
-// Validate import file structure
 router.post('/validate', authenticateToken, [
   body('credentials')
     .isArray({ min: 1 })
@@ -244,7 +232,6 @@ router.post('/validate', authenticateToken, [
       errors: []
     };
 
-    // Validate each credential
     credentials.forEach((cred, index) => {
       const credErrors = [];
 
@@ -260,7 +247,6 @@ router.post('/validate', authenticateToken, [
         credErrors.push('Username cannot exceed 200 characters');
       }
 
-      // Allow either encrypted credentials OR plaintext password (for re-encryption)
       const hasEncrypted = cred.encryptedPassword && cred.iv && cred.salt;
       const hasPlaintext = cred.password;
       

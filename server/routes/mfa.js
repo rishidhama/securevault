@@ -7,16 +7,13 @@ const mongoose = require('mongoose');
 const { authenticateToken } = require('./auth');
 const router = express.Router();
 
-// Check if MongoDB is connected
 const isMongoConnected = () => {
   return mongoose.connection.readyState === 1;
 };
 
-// Generate backup codes
 const generateBackupCodes = (count = 8) => {
   const codes = [];
   for (let i = 0; i < count; i++) {
-    // Generate 8-character alphanumeric codes
     const crypto = require('crypto');
     const code = crypto.randomBytes(4).toString('hex').toUpperCase();
     codes.push({ code, used: false });
@@ -24,7 +21,6 @@ const generateBackupCodes = (count = 8) => {
   return codes;
 };
 
-// Setup MFA for user
 router.post('/setup', authenticateToken, async (req, res) => {
   try {
     const user = await User.findById(req.user.userId);
@@ -42,23 +38,19 @@ router.post('/setup', authenticateToken, async (req, res) => {
       });
     }
 
-    // Generate new secret
     const secret = speakeasy.generateSecret({
       name: `SecureVault (${user.email})`,
       issuer: 'SecureVault',
-      length: 20  // 20 bytes = 32 base32 characters (standard TOTP length)
+      length: 20
     });
 
-    // Generate backup codes
     const backupCodes = generateBackupCodes();
 
-    // Save secret and backup codes
     user.mfaSecret = secret.base32;
     user.mfaBackupCodes = backupCodes;
     
     await user.save();
 
-    // Generate QR code
     let qrCodeUrl;
     try {
       qrCodeUrl = await QRCode.toDataURL(secret.otpauth_url);
@@ -67,7 +59,6 @@ router.post('/setup', authenticateToken, async (req, res) => {
         throw new Error('Generated QR code appears to be invalid');
       }
     } catch (qrError) {
-      // Fallback: generate QR code manually
       const manualOtpauth = `otpauth://totp/SecureVault:${user.email}?secret=${secret.base32}&issuer=SecureVault`;
       qrCodeUrl = await QRCode.toDataURL(manualOtpauth);
     }
@@ -93,7 +84,6 @@ router.post('/setup', authenticateToken, async (req, res) => {
   }
 });
 
-// Verify MFA setup
 router.post('/verify-setup', authenticateToken, [
   body('token')
     .notEmpty()
@@ -128,12 +118,11 @@ router.post('/verify-setup', authenticateToken, [
       });
     }
 
-    // Verify token
     const verified = speakeasy.totp.verify({
       secret: user.mfaSecret,
       encoding: 'base32',
       token: token,
-      window: 2 // Allow 2 time steps (60 seconds) for clock skew
+      window: 2
     });
 
     if (!verified) {
@@ -143,7 +132,6 @@ router.post('/verify-setup', authenticateToken, [
       });
     }
 
-    // Enable MFA
     user.mfaEnabled = true;
     await user.save();
 
@@ -168,7 +156,6 @@ router.post('/verify-setup', authenticateToken, [
   }
 });
 
-// Disable MFA
 router.post('/disable', authenticateToken, [
   body('token')
     .notEmpty()
@@ -202,7 +189,6 @@ router.post('/disable', authenticateToken, [
       });
     }
 
-    // Verify token
     const verified = speakeasy.totp.verify({
       secret: user.mfaSecret,
       encoding: 'base32',
@@ -217,7 +203,6 @@ router.post('/disable', authenticateToken, [
       });
     }
 
-    // Disable MFA
     user.mfaEnabled = false;
     user.mfaSecret = undefined;
     user.mfaBackupCodes = [];
@@ -244,7 +229,6 @@ router.post('/disable', authenticateToken, [
   }
 });
 
-// Verify MFA token (for login)
 router.post('/verify', [
   body('email')
     .notEmpty()
@@ -284,13 +268,11 @@ router.post('/verify', [
       });
     }
 
-    // Check if it's a backup code
     const backupCode = user.mfaBackupCodes.find(bc => 
       bc.code === token && !bc.used
     );
 
     if (backupCode) {
-      // Mark backup code as used
       backupCode.used = true;
       await user.save();
       
@@ -302,7 +284,6 @@ router.post('/verify', [
       return;
     }
 
-    // Verify TOTP token
     const verified = speakeasy.totp.verify({
       secret: user.mfaSecret,
       encoding: 'base32',
@@ -331,7 +312,6 @@ router.post('/verify', [
   }
 });
 
-// Check if user can use backup codes (has MFA enabled or backup codes)
 router.get('/can-use-backup-codes', authenticateToken, async (req, res) => {
   try {
     const user = await User.findById(req.user.userId);
@@ -363,10 +343,8 @@ router.get('/can-use-backup-codes', authenticateToken, async (req, res) => {
   }
 });
 
-// Get MFA status
 router.get('/status', authenticateToken, async (req, res) => {
   try {
-    // Check if MongoDB is connected
     if (!isMongoConnected()) {
       return res.status(503).json({
         success: false,
@@ -402,9 +380,6 @@ router.get('/status', authenticateToken, async (req, res) => {
   }
 });
 
-
-
-// Generate backup codes (for initial setup or when MFA is not enabled)
 router.post('/generate-backup-codes', authenticateToken, async (req, res) => {
   try {
     const user = await User.findById(req.user.userId);
@@ -416,11 +391,9 @@ router.post('/generate-backup-codes', authenticateToken, async (req, res) => {
       });
     }
 
-    // Generate new backup codes
     const newBackupCodes = generateBackupCodes();
     user.mfaBackupCodes = newBackupCodes;
     
-    // If MFA is not enabled, also enable it with a default secret
     if (!user.mfaEnabled) {
       const secret = speakeasy.generateSecret({
         name: `SecureVault (${user.email})`,
@@ -451,7 +424,6 @@ router.post('/generate-backup-codes', authenticateToken, async (req, res) => {
   }
 });
 
-// Regenerate backup codes (requires MFA verification)
 router.post('/regenerate-backup-codes', authenticateToken, [
   body('token')
     .notEmpty()
@@ -485,7 +457,6 @@ router.post('/regenerate-backup-codes', authenticateToken, [
       });
     }
 
-    // Verify token
     const verified = speakeasy.totp.verify({
       secret: user.mfaSecret,
       encoding: 'base32',
@@ -500,7 +471,6 @@ router.post('/regenerate-backup-codes', authenticateToken, [
       });
     }
 
-    // Generate new backup codes
     const newBackupCodes = generateBackupCodes();
     user.mfaBackupCodes = newBackupCodes;
     await user.save();

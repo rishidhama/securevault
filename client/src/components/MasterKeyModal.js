@@ -25,7 +25,6 @@ const MasterKeyModal = ({ isOpen, onClose, onSubmit, isError = false, errorMessa
     e.preventDefault();
     setErrors({});
 
-    // Validation
     if (!masterKey.trim()) {
       setErrors({ masterKey: 'Master key is required' });
       return;
@@ -36,7 +35,6 @@ const MasterKeyModal = ({ isOpen, onClose, onSubmit, isError = false, errorMessa
       return;
     }
     
-    // Check for weak master keys
     const weakKeys = ['password', '123456', 'masterkey', 'securevault'];
     if (weakKeys.includes(masterKey.toLowerCase())) {
       setErrors({ masterKey: 'Master key is too weak. Please choose a stronger password.' });

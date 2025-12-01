@@ -1,23 +1,17 @@
-// VaultAPI - Centralized API client for SecureVault backend
-// Handles authentication, error management, and request routing
 const API_BASE_URL = process.env.REACT_APP_API_URL || 
   (process.env.NODE_ENV === 'production' 
     ? window.location.origin 
     : 'http://localhost:5000');
 
-// Helper function to make API requests
 export const apiRequest = async (endpoint, options = {}) => {
-  // Ensure no double slashes in URL
   const baseUrl = API_BASE_URL.endsWith('/') ? API_BASE_URL.slice(0, -1) : API_BASE_URL;
   const cleanEndpoint = endpoint.startsWith('/') ? endpoint : `/${endpoint}`;
   const url = `${baseUrl}${cleanEndpoint}`;
   
-  // Debug logging (only in development)
   if (process.env.NODE_ENV === 'development') {
     console.log('API Request:', { baseUrl, cleanEndpoint, url });
   }
   
-  // Get JWT token from localStorage for authenticated requests
   const token = localStorage.getItem('securevault_token');
   
   const defaultOptions = {
@@ -34,10 +28,7 @@ export const apiRequest = async (endpoint, options = {}) => {
     const errorData = await response.json().catch(() => ({}));
     const errorMessage = errorData.error || errorData.message || `API request failed: ${response.status}`;
     
-    // Add more context for authentication errors
     if (response.status === 401) {
-      // Only throw if token was expected for this endpoint
-      // Some endpoints like login/register don't require auth
       if (token) {
         throw new Error(`Authentication required: ${errorMessage}`);
       } else {
@@ -56,7 +47,6 @@ export const apiRequest = async (endpoint, options = {}) => {
   return data;
 };
 
-// Auth API endpoints
 export const authAPI = {
   login: (credentials) => apiRequest('/api/auth/login', {
     method: 'POST',
@@ -140,7 +130,6 @@ export const mfaAPI = {
   })
 };
 
-// Credentials API endpoints
 export const credentialsAPI = {
   list: () => apiRequest('/api/credentials'),
   
@@ -172,7 +161,6 @@ export const credentialsAPI = {
   })
 };
 
-// Billing API endpoints
 export const billingAPI = {
   status: () => apiRequest('/api/billing/status'),
   checkout: (priceId) => apiRequest('/api/billing/checkout', {
@@ -182,7 +170,6 @@ export const billingAPI = {
   portal: () => apiRequest('/api/billing/portal', { method: 'POST' })
 };
 
-// Blockchain API endpoints (Sepolia)
 export const blockchainAPI = {
   status: () => apiRequest('/api/blockchain/status'),
   stats: () => apiRequest('/api/blockchain/stats'),
@@ -199,7 +186,6 @@ export const blockchainAPI = {
   })
 };
 
-// Import/Export API endpoints
 export const importExportAPI = {
   import: (credentials, overwrite = false) => apiRequest('/api/import-export/import', {
     method: 'POST',

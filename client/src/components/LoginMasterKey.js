@@ -36,13 +36,11 @@ const LoginMasterKey = ({ onLoginSuccess }) => {
   const [biometricSupported, setBiometricSupported] = useState(false);
   const [biometricEnabled, setBiometricEnabled] = useState(false);
 
-  // Check biometric support and if it's enabled for this user
   useEffect(() => {
     checkBiometricSupport();
     checkBiometricStatus();
   }, [emailFromState]);
 
-  // Re-check biometric status when session changes
   useEffect(() => {
     const handleStorageChange = () => {
       checkBiometricStatus();
@@ -68,32 +66,26 @@ const LoginMasterKey = ({ onLoginSuccess }) => {
     if (!emailFromState) return;
     
     try {
-      // First check sessionStorage for immediate response
       const stored = sessionStorage.getItem(`biometric_enabled_${emailFromState}`);
       const hasCredential = sessionStorage.getItem(`biometric_credential_${emailFromState}`);
       const hasMasterKey = sessionStorage.getItem(`securevault_master_key`) || sessionStorage.getItem(`securevault_master_key_${emailFromState}`);
       
-      // Check if biometric is properly set up locally
       if (stored === 'true' && hasCredential && hasMasterKey) {
-        // Verify with server that biometric is still enabled
         try {
           await authAPI.biometricChallenge(emailFromState);
           setBiometricEnabled(true);
           return;
         } catch (error) {
           if (error.message.includes('404') || error.message.includes('400')) {
-            // Definitive not-enabled response
             clearIncompleteBiometricData();
             return;
           } else {
-            // Transient error (rate limit, server error): keep local state
             setBiometricEnabled(true);
             return;
           }
         }
       }
       
-      // If biometric is marked as enabled but missing required data, clear it
       if (stored === 'true' && (!hasCredential || !hasMasterKey)) {
         clearIncompleteBiometricData();
         return;
@@ -115,13 +107,11 @@ const LoginMasterKey = ({ onLoginSuccess }) => {
       setIsLoading(true);
       setError('');
 
-      // Check if we have a master key stored
       const masterKey = sessionStorage.getItem('securevault_master_key') || sessionStorage.getItem(`securevault_master_key_${emailFromState}`);
       if (!masterKey || masterKey.length < 8) {
         throw new Error('Master key is required to enable biometric authentication. Please log in with your master key first.');
       }
 
-      // Create credential options with better error handling
       const credentialOptions = {
         publicKey: {
           rp: {

@@ -15,10 +15,8 @@ const blockchainRoutes = require('./routes/blockchain');
 const app = express();
 const PORT = process.env.PORT || 5000;
 
-// Trust proxy for rate limiting (fixes X-Forwarded-For warning)
 app.set('trust proxy', 1);
 
-// Security middleware
 app.use(helmet({
   contentSecurityPolicy: {
     directives: {
@@ -36,8 +34,6 @@ app.use(helmet({
   referrerPolicy: { policy: 'strict-origin-when-cross-origin' }
 }));
 
-// Middleware
-// CORS must come BEFORE any middleware that may short-circuit requests (like rate limiters)
 const corsOptions = {
   origin: [
     process.env.CLIENT_URL || 'http://localhost:3000',
@@ -51,10 +47,8 @@ const corsOptions = {
   allowedHeaders: ['Content-Type', 'Authorization']
 };
 app.use(cors(corsOptions));
-// Explicitly handle preflight across the app
 app.options('*', cors(corsOptions));
 
-// Rate limiting (relaxed in development)
 const limiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   max: process.env.NODE_ENV === 'development' ? 1000 : 100,
@@ -66,7 +60,6 @@ if (process.env.NODE_ENV !== 'development') {
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
-// Database connection with improved error handling
 const connectDB = async () => {
   const maxRetries = 3; // Reduced retries for faster feedback
   let retryCount = 0;
@@ -84,19 +77,18 @@ const connectDB = async () => {
         return false;
       }
 
-              // Improved connection options for better stability
-        const connectionOptions = {
+      const connectionOptions = {
           useNewUrlParser: true,
           useUnifiedTopology: true,
           serverSelectionTimeoutMS: 15000, // 15 seconds for server selection
           socketTimeoutMS: 30000, // 30 seconds for socket operations
           connectTimeoutMS: 15000, // 15 seconds for initial connection
-          maxPoolSize: 5, // Reduced pool size for development
-          minPoolSize: 1, // Minimum connections
-          maxIdleTimeMS: 60000, // Keep connections alive longer
+          maxPoolSize: 5,
+          minPoolSize: 1,
+          maxIdleTimeMS: 60000,
           retryWrites: true,
           w: 'majority',
-          heartbeatFrequencyMS: 10000 // More frequent heartbeats
+          heartbeatFrequencyMS: 10000
         };
 
       await mongoose.connect(mongoUri, connectionOptions);
@@ -105,7 +97,6 @@ const connectDB = async () => {
       console.log(`Database: ${mongoose.connection.name}`);
       console.log(`Host: ${mongoose.connection.host}`);
       
-      // Set up connection event listeners
       mongoose.connection.on('error', (err) => {
         console.error('MongoDB connection error:', err.message);
       });
@@ -126,7 +117,6 @@ const connectDB = async () => {
     }
   };
 
-  // Retry logic with exponential backoff
   while (retryCount < maxRetries) {
     const success = await attemptConnection();
     if (success) {
@@ -141,7 +131,6 @@ const connectDB = async () => {
     }
   }
 
-  // If all retries failed
   console.error('All MongoDB connection attempts failed');
   console.error('Application cannot start without database connection');
   console.log('\nTroubleshooting steps:');
@@ -160,7 +149,6 @@ const connectDB = async () => {
 
 connectDB();
 
-// Routes
 app.use('/api/auth', authRoutes);
 app.use('/api/mfa', mfaRoutes);
 app.use('/api/import-export', importExportRoutes);
@@ -168,7 +156,6 @@ app.use('/api/credentials', credentialRoutes);
 app.use('/api/billing', billingRoutes);
 app.use('/api/blockchain', blockchainRoutes);
 
-// Health check endpoint
 app.get('/api/health', (req, res) => {
   const dbStatus = mongoose.connection.readyState === 1 ? 'connected' : 'disconnected';
   
@@ -185,7 +172,6 @@ app.get('/api/health', (req, res) => {
   });
 });
 
-// Simple test endpoint
 app.get('/api/test', (req, res) => {
   res.json({ 
     message: 'Backend is working!',
@@ -194,7 +180,6 @@ app.get('/api/test', (req, res) => {
   });
 });
 
-// Error handling middleware
 app.use((err, req, res, next) => {
   console.error(err.stack);
   res.status(500).json({ 
@@ -203,7 +188,6 @@ app.use((err, req, res, next) => {
   });
 });
 
-// 404 handler
 app.use('*', (req, res) => {
   res.status(404).json({ error: 'Route not found' });
 });

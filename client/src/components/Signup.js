@@ -32,7 +32,6 @@ const Signup = ({ onSignupSuccess }) => {
         throw new Error('Master key must be at least 12 characters');
       }
       
-      // Check for weak master keys
       const weakKeys = ['password', '123456', 'masterkey', 'securevault'];
       if (weakKeys.includes(masterKey.toLowerCase())) {
         throw new Error('Master key is too weak. Please choose a stronger password.');
@@ -41,7 +40,6 @@ const Signup = ({ onSignupSuccess }) => {
         throw new Error('Master key and confirmation do not match');
       }
 
-      // Call backend API using authAPI
       const response = await authAPI.register({
         email: email.trim(),
         name: name.trim(),
@@ -51,18 +49,15 @@ const Signup = ({ onSignupSuccess }) => {
       if (response.success) {
         const data = response.data;
         
-        // Success - store token and user info
         localStorage.setItem('securevault_token', data.token);
         localStorage.setItem('securevault_user', JSON.stringify(data.user));
         
         toast.success('Account created successfully!');
         
-        // Call parent callback if provided
         if (onSignupSuccess) {
           onSignupSuccess(data);
         }
         
-        // Navigate to dashboard
         navigate('/');
       } else {
         throw new Error(response.error || 'Registration failed');

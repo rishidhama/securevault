@@ -3,7 +3,6 @@ import { BrowserRouter as Router, Routes, Route, Navigate, useLocation, Link } f
 import { Toaster } from 'react-hot-toast';
 import { Shield, Lock, LogOut } from 'lucide-react';
 
-// Components
 import Dashboard from './components/Dashboard';
 import AddCredential from './components/AddCredential';
 import Vault from './components/Vault';
@@ -22,13 +21,11 @@ import BackupCodesManager from './components/BackupCodesManager';
 import BreachMonitor from './components/BreachMonitor';
 import SmartCategories from './components/SmartCategories';
 
-// Services
 import { credentialsAPI, blockchainAPI } from './services/api';
 import encryptionService from './utils/encryption';
 import { authAPI } from './services/api';
 import { computeMerkleRoot } from './utils/merkle';
 
-// Styles
 import './index.css';
 
 function Breadcrumbs() {
@@ -65,7 +62,6 @@ function App() {
   const [selectedCategory, setSelectedCategory] = useState('all');
   const [showFavorites, setShowFavorites] = useState(false);
 
-  // Check authentication and initialize theme on app load
   useEffect(() => {
     checkAuthStatus();
     initializeTheme();
@@ -81,7 +77,6 @@ function App() {
     const resetTimer = () => {
       if (idleTimer) clearTimeout(idleTimer);
       idleTimer = setTimeout(() => {
-        // Clear sensitive data and force logout on idle
         clearAuthData();
       }, IDLE_TIMEOUT_MS);
     };
@@ -89,7 +84,6 @@ function App() {
     const activityEvents = ['mousemove', 'keydown', 'scroll', 'click', 'touchstart', 'visibilitychange'];
     activityEvents.forEach(evt => window.addEventListener(evt, resetTimer, { passive: true }));
 
-    // Start timer
     resetTimer();
 
     return () => {
@@ -98,17 +92,12 @@ function App() {
     };
   }, []);
 
-
-
-  // Initialize theme from localStorage
   const initializeTheme = () => {
     const savedTheme = localStorage.getItem('securevault_theme') || 'light';
     const root = document.documentElement;
     
-    // Remove all theme classes
     root.classList.remove('theme-light', 'theme-dark', 'theme-system');
     
-    // Apply saved theme
     if (savedTheme === 'system') {
       const systemTheme = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
       root.classList.add(`theme-${systemTheme}`);
@@ -116,7 +105,6 @@ function App() {
       root.classList.add(`theme-${savedTheme}`);
     }
     
-    // Initialize other appearance settings
     const savedFontSize = localStorage.getItem('securevault_font_size') || 'medium';
     const savedCompactMode = localStorage.getItem('securevault_compact_mode') === 'true';
     
@@ -136,14 +124,11 @@ function App() {
 
       // If no session exists, user needs to login (master key will be entered during login)
       if (!token || !storedUser) {
-        // No session - this is normal for first visit or after logout
-        // User will be directed to login page where master key is required
         setIsAuthenticated(false);
         setIsLoading(false);
         return;
       }
 
-      // Session exists - verify token is still valid
       try {
         const response = await authAPI.profile();
 
@@ -151,30 +136,22 @@ function App() {
           console.log('Token valid, setting authenticated state');
           setUser(response.data.user);
           
-          // Master key is required for encryption operations
-          // If it exists in sessionStorage, use it; otherwise user must re-enter it
           if (storedMasterKey) {
             setMasterKey(storedMasterKey);
             setIsAuthenticated(true);
           } else {
-            // Session exists but master key is missing (e.g., after refresh)
-            // User is authenticated but needs to re-enter master key for encryption
             setIsAuthenticated(true);
-            // Master key will be requested when needed for encryption operations
           }
         } else {
           console.log('Token invalid, clearing storage');
           clearAuthData();
         }
       } catch (error) {
-        // Handle authentication errors
         if (error.message && error.message.includes('Authentication required')) {
           console.log('Authentication token invalid or expired');
           clearAuthData();
         } else {
           console.error('Auth check failed:', error);
-          // On network errors, don't clear auth - user might just be offline
-          // But still set authenticated to false to prevent API calls
           setIsAuthenticated(false);
         }
       }
@@ -197,7 +174,6 @@ function App() {
     setIsAuthenticated(false);
   };
 
-  // Load credentials and stats when authenticated
   useEffect(() => {
     if (isAuthenticated) {
       loadData();
@@ -206,13 +182,10 @@ function App() {
 
   const loadData = async () => {
     try {
-      // Only show loading spinner during initial app load, not after login
-      // This allows UI to render immediately after login
       if (isInitialAuthCheck) {
         setIsLoading(true);
       }
       
-      // Add timeout to prevent infinite loading (10 seconds)
       const timeoutPromise = new Promise((_, reject) => 
         setTimeout(() => reject(new Error('Data loading timeout')), 10000)
       );
@@ -228,28 +201,23 @@ function App() {
         timeoutPromise
       ]);
 
-      // Handle the response structure correctly
       const creds = credentialsResponse.data || credentialsResponse || [];
       setCredentials(creds);
       setStats(statsResponse.data || statsResponse || { total: 0, favorites: 0, categories: 0 });
       setCategories(categoriesResponse.data || categoriesResponse || []);
 
-      // Warm decrypt cache to keep UI synchronous (non-blocking)
       if (masterKey) {
         try {
           encryptionService.warmDecryptCache(creds, masterKey).catch(() => {
-            // Silently fail - decryption will happen on-demand
           });
         } catch (_) {}
       }
     } catch (error) {
       console.error('Failed to load data:', error.message || error);
-      // Set empty defaults on error - don't block the UI
       setCredentials([]);
       setStats({ total: 0, favorites: 0, categories: 0 });
       setCategories([]);
     } finally {
-      // Always clear loading state and mark initial check as complete
       setIsLoading(false);
       setIsInitialAuthCheck(false);
     }
@@ -257,7 +225,6 @@ function App() {
 
   const handleLoginSuccess = async (authData) => {
     try {
-      // Store authentication data immediately
       if (authData.token) {
         localStorage.setItem('securevault_token', authData.token);
       }
@@ -265,13 +232,10 @@ function App() {
         localStorage.setItem('securevault_user', JSON.stringify(authData.user));
       }
       
-      // Set state immediately for responsive UI
       setUser(authData.user);
       setMasterKey(authData.masterKey || '');
       setIsAuthenticated(true);
       
-      // Fetch full user profile in background (non-blocking)
-      // Use a timeout to prevent hanging
       const profilePromise = authAPI.profile();
       const timeoutPromise = new Promise((_, reject) => 
         setTimeout(() => reject(new Error('Profile fetch timeout')), 5000)
@@ -288,11 +252,8 @@ function App() {
         // If profile fetch fails or times out, continue with login data
         console.log('Profile fetch skipped (using login data):', error.message);
       }
-      
-      // The useEffect will handle loading data when isAuthenticated changes
     } catch (error) {
       console.error('Login success handler error:', error);
-      // Even if there's an error, we should still be authenticated
       setUser(authData.user);
       setMasterKey(authData.masterKey || '');
       setIsAuthenticated(true);
@@ -342,24 +303,19 @@ function App() {
           salt: encryptedData.salt
         };
 
-        // Remove plain text password before sending to server
         delete newCredential.password;
       } else if (credentialData.password) {
-        // Remove plain text password if it exists
         delete newCredential.password;
       }
 
       const response = await credentialsAPI.create(newCredential);
       
-      // Add the new credential to the list
       const newCredentialData = response.data || response;
       setCredentials(prev => [newCredentialData, ...prev]);
       setStats(prev => ({ ...prev, total: prev.total + 1 }));
 
-      // Warm cache for the newly added credential
       try { await encryptionService.warmDecryptCache([newCredentialData], masterKey); } catch (_) {}
 
-      // Anchor new Merkle root in background
       try {
         const updated = [newCredentialData, ...credentials];
         const root = await computeMerkleRoot(updated);
@@ -382,7 +338,6 @@ function App() {
       setCredentials(prev => prev.filter(cred => cred._id !== id));
       setStats(prev => ({ ...prev, total: prev.total - 1 }));
 
-      // Anchor new Merkle root in background
       try {
         const updated = credentials.filter(cred => cred._id !== id);
         const root = await computeMerkleRoot(updated);
@@ -408,7 +363,6 @@ function App() {
         )
       );
       
-      // Update stats
       const newStats = await credentialsAPI.getStats();
       setStats(newStats.data);
     } catch (error) {
@@ -425,7 +379,6 @@ function App() {
         return updatedList;
       });
 
-      // Anchor new Merkle root in background
       try {
         const root = await computeMerkleRoot(updatedList || credentials);
         if (root && user?.id) {
@@ -463,7 +416,6 @@ function App() {
     return <LoadingSpinner />;
   }
 
-  // Public routes: landing, login, signup, MFA
   if (!isAuthenticated) {
     return (
       <Router>

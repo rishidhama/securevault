@@ -6,7 +6,6 @@ const mongoose = require('mongoose');
 const crypto = require('crypto');
 const router = express.Router();
 
-// JWT secret from environment - required for security
 const JWT_SECRET = process.env.JWT_SECRET;
 if (!JWT_SECRET) {
   throw new Error('JWT_SECRET environment variable is required for security');
@@ -15,12 +14,10 @@ if (!JWT_SECRET) {
 // Fallback storage for non-database mode
 const fallbackUsers = new Map();
 
-// Check if MongoDB is connected
 const isMongoConnected = () => {
   return mongoose.connection.readyState === 1;
 };
 
-// Validation middleware
 const validateRegistration = [
   body('email')
     .notEmpty()
@@ -53,7 +50,6 @@ const validateLogin = [
     .withMessage('Master key is required')
 ];
 
-// Generate JWT token
 const generateToken = (userId) => {
   return jwt.sign(
     { userId, iat: Date.now() },
@@ -62,7 +58,6 @@ const generateToken = (userId) => {
   );
 };
 
-// Authentication middleware
 const authenticateToken = (req, res, next) => {
   const authHeader = req.headers['authorization'];
   const token = authHeader && authHeader.split(' ')[1];
@@ -80,7 +75,6 @@ const authenticateToken = (req, res, next) => {
   });
 };
 
-// Register new user
 router.post('/register', validateRegistration, async (req, res) => {
   try {
     const errors = validationResult(req);
@@ -93,8 +87,6 @@ router.post('/register', validateRegistration, async (req, res) => {
 
     const { email, name, masterKey } = req.body;
 
-    // Production mode with MongoDB
-    // Check if user already exists
     const existingUser = await User.findByEmail(email);
     if (existingUser) {
       return res.status(400).json({
@@ -103,19 +95,16 @@ router.post('/register', validateRegistration, async (req, res) => {
       });
     }
 
-    // Create new user (master key is hashed in pre-save middleware)
     const user = new User({
       email,
       name,
-      masterKeyHash: masterKey // This will be hashed before saving
+      masterKeyHash: masterKey
     });
 
     await user.save();
 
-    // Generate JWT token
     const token = generateToken(user._id);
 
-    // Update last login
     user.lastLogin = new Date();
     await user.save();
 
@@ -142,7 +131,6 @@ router.post('/register', validateRegistration, async (req, res) => {
   }
 });
 
-// Login user
 router.post('/login', validateLogin, async (req, res) => {
   try {
     const errors = validationResult(req);
@@ -155,9 +143,7 @@ router.post('/login', validateLogin, async (req, res) => {
 
     const { email, masterKey } = req.body;
 
-    // Production mode with MongoDB
     try {
-      // Find user by email
       const user = await User.findByEmail(email);
       if (!user) {
         return res.status(401).json({
@@ -166,7 +152,6 @@ router.post('/login', validateLogin, async (req, res) => {
         });
       }
 
-      // Check if account is locked
       if (user.isLocked()) {
         const lockTime = new Date(user.lockUntil).toLocaleString();
         return res.status(423).json({
@@ -175,22 +160,19 @@ router.post('/login', validateLogin, async (req, res) => {
         });
       }
 
-      // Validate master key with additional security checks
       try {
         const isValidKey = await user.validateMasterKey(masterKey);
         if (!isValidKey) {
-          // Increment failed login attempts
           await user.incLoginAttempts();
           
           return res.status(401).json({
             success: false,
             error: 'Invalid email or master key',
             code: 'INVALID_CREDENTIALS'
-          });
-        }
-      } catch (keyError) {
-        // Master key validation failed (too weak, etc.)
-        await user.incLoginAttempts();
+        });
+      }
+    } catch (keyError) {
+      await user.incLoginAttempts();
         
         return res.status(401).json({
           success: false,
@@ -199,14 +181,11 @@ router.post('/login', validateLogin, async (req, res) => {
         });
       }
 
-      // Reset login attempts on successful login
       await user.resetLoginAttempts();
 
-      // Update last login
       user.lastLogin = new Date();
       await user.save();
 
-      // Generate JWT token
       const token = generateToken(user._id);
 
       res.json({
@@ -243,7 +222,6 @@ router.post('/login', validateLogin, async (req, res) => {
   }
 });
 
-// Biometric challenge endpoint for WebAuthn
 router.post('/biometric-challenge', [
   body('email')
     .notEmpty()
@@ -263,7 +241,6 @@ router.post('/biometric-challenge', [
 
     const { email } = req.body;
 
-    // Check if MongoDB is connected
     if (!isMongoConnected()) {
       return res.status(503).json({
         success: false,
@@ -289,22 +266,18 @@ router.post('/biometric-challenge', [
       });
     }
 
-    // Generate a random challenge
     const challenge = crypto.randomBytes(32);
     
-    // Store the challenge temporarily (in production, use Redis or similar)
     if (!global.biometricChallenges) {
       global.biometricChallenges = new Map();
     }
     
-    // Store challenge with user email and timestamp
     global.biometricChallenges.set(email, {
       challenge: Array.from(challenge),
       timestamp: Date.now(),
       userId: user._id.toString()
     });
 
-    // Clean up old challenges (older than 5 minutes)
     const now = Date.now();
     for (const [key, value] of global.biometricChallenges.entries()) {
       if (now - value.timestamp > 5 * 60 * 1000) {
@@ -338,7 +311,6 @@ router.post('/biometric-challenge', [
   }
 });
 
-// Biometric login endpoint
 router.post('/biometric-login', [
   body('email')
     .notEmpty()
@@ -364,7 +336,6 @@ router.post('/biometric-login', [
 
     const { email, assertion, challenge } = req.body;
 
-    // Check if MongoDB is connected
     if (!isMongoConnected()) {
       return res.status(503).json({
         success: false,
@@ -390,7 +361,6 @@ router.post('/biometric-login', [
       });
     }
 
-    // Verify the challenge
     if (!global.biometricChallenges || !global.biometricChallenges.has(email)) {
       return res.status(400).json({
         success: false,
@@ -400,7 +370,6 @@ router.post('/biometric-login', [
 
     const storedChallenge = global.biometricChallenges.get(email);
     
-    // Check if challenge is expired (5 minutes)
     if (Date.now() - storedChallenge.timestamp > 5 * 60 * 1000) {
       global.biometricChallenges.delete(email);
       return res.status(400).json({
@@ -409,7 +378,6 @@ router.post('/biometric-login', [
       });
     }
 
-    // Verify challenge matches
     const receivedChallenge = new Uint8Array(challenge);
     const expectedChallenge = new Uint8Array(storedChallenge.challenge);
     
@@ -435,7 +403,6 @@ router.post('/biometric-login', [
       });
     }
 
-    // Verify that the user has a stored biometric credential
     if (!user.biometricCredential) {
       return res.status(400).json({
         success: false,
@@ -443,7 +410,6 @@ router.post('/biometric-login', [
       });
     }
 
-    // Verify the assertion ID matches the stored credential
     if (assertion.id !== user.biometricCredential.id) {
       return res.status(400).json({
         success: false,
@@ -451,14 +417,11 @@ router.post('/biometric-login', [
       });
     }
     
-    // Clean up the used challenge
     global.biometricChallenges.delete(email);
     
-    // Update last login
     user.lastLogin = new Date();
     await user.save();
 
-    // Generate JWT token
     const token = generateToken(user._id);
 
     res.json({
@@ -472,7 +435,7 @@ router.post('/biometric-login', [
           mfaEnabled: user.mfaEnabled
         },
         token,
-        masterKey: '' // We don't have the master key in biometric login
+        masterKey: ''
       }
     });
   } catch (error) {
@@ -484,10 +447,8 @@ router.post('/biometric-login', [
   }
 });
 
-// Enable biometric authentication for user
 router.post('/enable-biometric', authenticateToken, async (req, res) => {
   try {
-    // Check if MongoDB is connected
     if (!isMongoConnected()) {
       return res.status(503).json({
         success: false,
@@ -505,12 +466,9 @@ router.post('/enable-biometric', authenticateToken, async (req, res) => {
 
     const { credentialData } = req.body;
 
-    // Enable biometric authentication
     user.biometricEnabled = true;
     
-    // Store credential data for future authentication
     if (credentialData) {
-      // Store the credential data as-is (Mixed type allows any structure)
       user.biometricCredential = credentialData;
     }
     
@@ -533,10 +491,8 @@ router.post('/enable-biometric', authenticateToken, async (req, res) => {
   }
 });
 
-// Get current user profile
 router.get('/profile', authenticateToken, async (req, res) => {
   try {
-    // Check if MongoDB is connected
     if (!isMongoConnected()) {
       return res.status(503).json({
         success: false,
@@ -577,10 +533,8 @@ router.get('/profile', authenticateToken, async (req, res) => {
   }
 });
 
-// Get user preferences
 router.get('/preferences', authenticateToken, async (req, res) => {
   try {
-    // Check if MongoDB is connected
     if (!isMongoConnected()) {
       return res.status(503).json({
         success: false,
@@ -596,7 +550,6 @@ router.get('/preferences', authenticateToken, async (req, res) => {
   }
 });
 
-// Update user preferences
 router.put('/preferences', authenticateToken, async (req, res) => {
   try {
     const prefs = req.body || {};
@@ -612,7 +565,6 @@ router.put('/preferences', authenticateToken, async (req, res) => {
   }
 });
 
-// Fallback mode status endpoint
 router.get('/demo-status', (req, res) => {
   res.json({
     success: true,
@@ -627,7 +579,6 @@ router.get('/demo-status', (req, res) => {
   });
 });
 
-// Update user profile
 router.put('/profile', authenticateToken, async (req, res) => {
   try {
     const { name } = req.body;
@@ -639,7 +590,6 @@ router.put('/profile', authenticateToken, async (req, res) => {
       });
     }
 
-    // Fallback mode when MongoDB is not connected
     if (!isMongoConnected()) {
       const fallbackUser = Array.from(fallbackUsers.values()).find(u => u._id === req.user.userId);
       if (!fallbackUser) {
@@ -701,7 +651,6 @@ router.put('/profile', authenticateToken, async (req, res) => {
   }
 });
 
-// Change master key
 router.post('/change-master-key', authenticateToken, async (req, res) => {
   try {
     const { currentMasterKey, newMasterKey } = req.body;
@@ -720,7 +669,6 @@ router.post('/change-master-key', authenticateToken, async (req, res) => {
       });
     }
 
-    // Fallback mode when MongoDB is not connected
     if (!isMongoConnected()) {
       const fallbackUser = Array.from(fallbackUsers.values()).find(u => u._id === req.user.userId);
       if (!fallbackUser) {
@@ -750,7 +698,6 @@ router.post('/change-master-key', authenticateToken, async (req, res) => {
       });
     }
 
-    // Verify current master key
     const isValidKey = await user.validateMasterKey(currentMasterKey);
     if (!isValidKey) {
       return res.status(401).json({
@@ -759,8 +706,7 @@ router.post('/change-master-key', authenticateToken, async (req, res) => {
       });
     }
 
-    // Update master key hash
-    user.masterKeyHash = newMasterKey; // Will be hashed in pre-save
+    user.masterKeyHash = newMasterKey;
     await user.save();
 
     res.json({
@@ -776,11 +722,8 @@ router.post('/change-master-key', authenticateToken, async (req, res) => {
   }
 });
 
-// Logout (client-side token removal, but we can blacklist if needed)
 router.post('/logout', authenticateToken, async (req, res) => {
   try {
-    // In a production app, you might want to blacklist the token
-    // For now, just return success - client removes token
     res.json({
       success: true,
       message: 'Logged out successfully'
@@ -794,19 +737,14 @@ router.post('/logout', authenticateToken, async (req, res) => {
   }
 });
 
-// Generate MFA secret
 router.get('/generate-mfa-secret', authenticateToken, async (req, res) => {
   try {
-    // Generate a random secret for TOTP
-    // Use base64 instead of base32 since Node.js doesn't have built-in base32
     const secret = crypto.randomBytes(20).toString('base64').replace(/[^A-Z2-7]/g, '').substring(0, 32);
     
-    // Generate QR code for the secret
     const QRCode = require('qrcode');
     const otpauth = `otpauth://totp/SecureVault:${req.user.userId}?secret=${secret}&issuer=SecureVault`;
     const qrCodeDataURL = await QRCode.toDataURL(otpauth);
     
-    // Fallback mode when MongoDB is not connected
     if (!isMongoConnected()) {
       const fallbackUser = Array.from(fallbackUsers.values()).find(u => u._id === req.user.userId);
       if (!fallbackUser) {
@@ -831,7 +769,6 @@ router.get('/generate-mfa-secret', authenticateToken, async (req, res) => {
       });
     }
 
-    // Store the secret temporarily (in production, you'd want to encrypt this)
     user.mfaSecret = secret;
     await user.save();
 
@@ -849,7 +786,6 @@ router.get('/generate-mfa-secret', authenticateToken, async (req, res) => {
   }
 });
 
-// Setup MFA
 router.post('/setup-mfa', authenticateToken, async (req, res) => {
   try {
     const { secret, code } = req.body;
@@ -861,7 +797,6 @@ router.post('/setup-mfa', authenticateToken, async (req, res) => {
       });
     }
 
-    // Simple TOTP validation (in production, use a proper library like speakeasy)
     const expectedCode = generateTOTP(secret);
     const backupCode = generateBackupTOTP(secret);
     
@@ -873,7 +808,6 @@ router.post('/setup-mfa', authenticateToken, async (req, res) => {
       });
     }
 
-    // Fallback mode when MongoDB is not connected
     if (!isMongoConnected()) {
       const fallbackUser = Array.from(fallbackUsers.values()).find(u => u._id === req.user.userId);
       if (!fallbackUser) {
@@ -910,7 +844,6 @@ router.post('/setup-mfa', authenticateToken, async (req, res) => {
       });
     }
 
-    // Enable MFA
     user.mfaEnabled = true;
     await user.save();
 
@@ -927,21 +860,16 @@ router.post('/setup-mfa', authenticateToken, async (req, res) => {
   }
 });
 
-// TOTP generation function for MFA verification
 function generateTOTP(secret) {
-  // This is a simplified TOTP implementation
-  // In production, use a proper library like speakeasy
   const crypto = require('crypto');
-  const time = Math.floor(Date.now() / 30000); // 30-second window
+  const time = Math.floor(Date.now() / 30000);
   const timeBuffer = Buffer.alloc(8);
   timeBuffer.writeBigUInt64BE(BigInt(time), 0);
   
-  // Create HMAC-SHA1 hash
   const hmac = crypto.createHmac('sha1', secret);
   hmac.update(timeBuffer);
   const hash = hmac.digest();
   
-  // Generate 6-digit code
   const offset = hash[hash.length - 1] & 0xf;
   const code = ((hash[offset] & 0x7f) << 24) |
                ((hash[offset + 1] & 0xff) << 16) |
@@ -952,16 +880,13 @@ function generateTOTP(secret) {
 }
 
 function generateBackupTOTP(secret) {
-  // Generate a predictable code for testing
   const time = Math.floor(Date.now() / 30000);
   const simpleHash = require('crypto').createHash('md5').update(secret + time).digest('hex');
   return simpleHash.substring(0, 6);
 }
 
-// Delete account
 router.delete('/delete-account', authenticateToken, async (req, res) => {
   try {
-    // Fallback mode when MongoDB is not connected
     if (!isMongoConnected()) {
       const fallbackUser = Array.from(fallbackUsers.values()).find(u => u._id === req.user.userId);
       if (!fallbackUser) {
@@ -985,7 +910,6 @@ router.delete('/delete-account', authenticateToken, async (req, res) => {
       });
     }
 
-    // Delete the user
     await User.findByIdAndDelete(req.user.userId);
 
     res.json({
@@ -1001,7 +925,6 @@ router.delete('/delete-account', authenticateToken, async (req, res) => {
   }
 });
 
-// Biometric authentication endpoint
 router.post('/biometric-auth', [
   body('email')
     .notEmpty()
@@ -1025,7 +948,6 @@ router.post('/biometric-auth', [
       });
     }
 
-    // Check if MongoDB is connected
     if (!isMongoConnected()) {
       return res.status(503).json({
         success: false,
@@ -1033,7 +955,6 @@ router.post('/biometric-auth', [
       });
     }
 
-    // Find real user in database
     const user = await User.findByEmail(email);
     if (!user) {
       return res.status(404).json({
@@ -1042,7 +963,6 @@ router.post('/biometric-auth', [
       });
     }
 
-    // Check if biometric is enabled for this user
     if (!user.biometricEnabled) {
       return res.status(400).json({
         success: false,
@@ -1050,10 +970,8 @@ router.post('/biometric-auth', [
       });
     }
 
-    // Generate JWT token with real user ID
     const token = generateToken(user._id);
     
-    // Update last login
     user.lastLogin = new Date();
     await user.save();
     
@@ -1070,7 +988,7 @@ router.post('/biometric-auth', [
           createdAt: user.createdAt
         },
         token: token,
-        masterKey: '' // Master key is stored client-side only
+        masterKey: ''
       }
     });
   } catch (error) {

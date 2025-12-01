@@ -46,7 +46,6 @@ const Dashboard = ({
   const location = useLocation();
   const navigate = useNavigate();
 
-  // Check breaches for all credentials on mount or when credentials change
   useEffect(() => {
     let isMounted = true;
     async function checkAllBreaches() {

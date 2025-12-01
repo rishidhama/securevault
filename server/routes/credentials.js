@@ -7,11 +7,10 @@ const { authenticateToken } = require('./auth');
 const ethereumService = require('../services/ethereum-service');
 const blockchainDecoder = require('../services/blockchain-decoder-persistent');
 
-// Helper function to create blockchain event (non-blocking)
 const createBlockchainEvent = async (userId, action, credentialId, credentialData = null) => {
   try {
     if (!process.env.ETHEREUM_ENABLED || process.env.ETHEREUM_ENABLED !== 'true') {
-      return; // Skip if blockchain is disabled
+      return;
     }
 
     const vaultData = {
@@ -36,20 +35,17 @@ const createBlockchainEvent = async (userId, action, credentialId, credentialDat
       } : null
     });
 
-    // Generate SHA-256 hash of the vault data
     const crypto = require('crypto');
     const vaultHash = crypto.createHash('sha256')
       .update(JSON.stringify(vaultData))
       .digest('hex');
 
-    // Validate that we have a proper hash
     if (!vaultHash || vaultHash.length === 0) {
       throw new Error('Generated vault hash is empty');
     }
 
     const result = await ethereumService.storeVaultHash(userId, vaultHash);
     
-    // Store operation details for later decoding
     if (result.success && result.txHash) {
       await blockchainDecoder.storeOperationDetails(result.txHash, {
         userId,
@@ -73,7 +69,6 @@ const createBlockchainEvent = async (userId, action, credentialId, credentialDat
     });
   } catch (error) {
     console.error(`Blockchain event failed for ${action} credential ${credentialId}:`, error.message);
-    // Don't throw - blockchain failures shouldn't break credential operations
   }
 };
 
@@ -177,9 +172,8 @@ router.get('/', authenticateToken, async (req, res) => {
   try {
     const { search, category, favorite, sortBy = 'createdAt', sortOrder = 'desc' } = req.query;
     
-    let query = { userId: req.user.userId }; // Filter by user ID
+    let query = { userId: req.user.userId };
     
-    // Search functionality
     if (search) {
       query.$or = [
         { title: { $regex: search, $options: 'i' } },
@@ -188,12 +182,10 @@ router.get('/', authenticateToken, async (req, res) => {
       ];
     }
     
-    // Category filter
     if (category && category !== 'all') {
       query.category = category;
     }
     
-    // Favorite filter
     if (favorite === 'true') {
       query.isFavorite = true;
     }
@@ -217,7 +209,6 @@ router.get('/', authenticateToken, async (req, res) => {
   }
 });
 
-// GET single credential by ID
 router.get('/:id', authenticateToken, async (req, res) => {
   try {
     const credential = await Credential.findOne({ 
@@ -245,7 +236,6 @@ router.get('/:id', authenticateToken, async (req, res) => {
   }
 });
 
-// POST new credential
 router.post('/', authenticateToken, validateCredential, async (req, res) => {
   try {
     const errors = validationResult(req);
@@ -260,7 +250,6 @@ router.post('/', authenticateToken, validateCredential, async (req, res) => {
     
     await credential.save();
     
-    // Log to blockchain (non-blocking)
     createBlockchainEvent(req.user.userId, 'CREATE', credential._id.toString(), credential);
     
     res.status(201).json({
@@ -278,7 +267,6 @@ router.post('/', authenticateToken, validateCredential, async (req, res) => {
   }
 });
 
-// PUT update credential
 router.put('/:id', authenticateToken, validatePartialUpdate, async (req, res) => {
   try {
     const errors = validationResult(req);
@@ -296,7 +284,6 @@ router.put('/:id', authenticateToken, validatePartialUpdate, async (req, res) =>
       return res.status(404).json({ success: false, error: 'Credential not found' });
     }
     
-    // Log to blockchain (non-blocking)
     createBlockchainEvent(req.user.userId, 'UPDATE', credential._id.toString(), credential);
     
     res.json({
@@ -321,7 +308,6 @@ router.put('/:id', authenticateToken, validatePartialUpdate, async (req, res) =>
   }
 });
 
-// DELETE credential
 router.delete('/:id', authenticateToken, async (req, res) => {
   try {
     const credential = await Credential.findOneAndDelete({ 
@@ -333,7 +319,6 @@ router.delete('/:id', authenticateToken, async (req, res) => {
       return res.status(404).json({ success: false, error: 'Credential not found' });
     }
     
-    // Log to blockchain (non-blocking)
     createBlockchainEvent(req.user.userId, 'DELETE', credential._id.toString(), credential);
     
     res.json({ success: true, message: 'Credential deleted successfully' });
@@ -343,7 +328,6 @@ router.delete('/:id', authenticateToken, async (req, res) => {
   }
 });
 
-// PATCH update category
 router.patch('/:id/category', authenticateToken, [
   body('category')
     .optional()
@@ -373,7 +357,6 @@ router.patch('/:id/category', authenticateToken, [
   }
 });
 
-// PATCH toggle favorite status
 router.patch('/:id/favorite', authenticateToken, async (req, res) => {
   try {
     const credential = await Credential.findOne({ _id: req.params.id, userId: req.user.userId });
@@ -395,7 +378,6 @@ router.patch('/:id/favorite', authenticateToken, async (req, res) => {
   }
 });
 
-// GET categories
 router.get('/categories/list', authenticateToken, async (req, res) => {
   try {
     const categories = await Credential.distinct('category', { userId: req.user.userId });
@@ -406,7 +388,6 @@ router.get('/categories/list', authenticateToken, async (req, res) => {
   }
 });
 
-// GET stats
 router.get('/stats/overview', authenticateToken, async (req, res) => {
   try {
     const totalCredentials = await Credential.countDocuments({ userId: req.user.userId });

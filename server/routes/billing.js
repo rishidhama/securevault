@@ -23,7 +23,6 @@ const authMiddleware = async (req, res, next) => {
   }
 };
 
-// Get billing status
 router.get('/status', authMiddleware, async (req, res) => {
   try {
     const user = req.user;
@@ -49,7 +48,6 @@ router.get('/status', authMiddleware, async (req, res) => {
   }
 });
 
-// Create checkout session for upgrading
 router.post('/checkout', authMiddleware, body('priceId').isString(), async (req, res) => {
   try {
     const errors = validationResult(req);
@@ -77,7 +75,6 @@ router.post('/checkout', authMiddleware, body('priceId').isString(), async (req,
   }
 });
 
-// Create Billing Portal session
 router.post('/portal', authMiddleware, async (req, res) => {
   try {
     if (!stripe) return res.status(400).json({ success: false, error: 'Stripe not configured' });

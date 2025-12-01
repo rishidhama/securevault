@@ -20,10 +20,8 @@ contract PasswordVault {
         bool exists;
     }
 
-    // userId (string) => vault data
     mapping(string => VaultHash) public vaults;
 
-    // Track unique users efficiently
     mapping(bytes32 => bool) private userSeen;
     uint256 private vaultCount;
 
@@ -31,7 +29,6 @@ contract PasswordVault {
     event VaultUpdated(string indexed userId, string vaultHash, uint256 timestamp);
     event VaultDeleted(string indexed userId, uint256 timestamp);
 
-    // Owner (for administrative ops like delete/ownership transfer)
     address public owner;
 
     modifier onlyOwner() {
@@ -52,14 +49,12 @@ contract PasswordVault {
         require(bytes(userId).length > 0, "userId empty");
         require(bytes(vaultHash).length > 0, "vaultHash empty");
 
-        // Increment count only when first time we see this user or record was deleted
         if (!vaults[userId].exists) {
             bytes32 key = keccak256(bytes(userId));
             if (!userSeen[key]) {
                 userSeen[key] = true;
                 vaultCount += 1;
             } else {
-                // userSeen true but exists false -> previously deleted, re-add should count again
                 vaultCount += 1;
             }
         }

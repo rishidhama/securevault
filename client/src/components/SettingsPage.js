@@ -80,7 +80,6 @@ const SettingsPage = ({ user, masterKey, onLogout, credentials, decryptPassword 
     }
   });
 
-  // Check if biometric is enabled for this user
   useEffect(() => {
     if (user?.email) {
       const stored = sessionStorage.getItem(`biometric_enabled_${user.email}`);
@@ -88,7 +87,6 @@ const SettingsPage = ({ user, masterKey, onLogout, credentials, decryptPassword 
     }
   }, [user?.email]);
 
-  // Load user preferences
   useEffect(() => {
     const loadPreferences = async () => {
       try {
@@ -116,12 +114,10 @@ const SettingsPage = ({ user, masterKey, onLogout, credentials, decryptPassword 
     }
   };
 
-  // Load existing backup codes when component mounts
   useEffect(() => {
     const loadExistingBackupCodes = async () => {
       if (!user?.email) return;
       
-      // Check if user is authenticated
       const token = localStorage.getItem('securevault_token');
       if (!token) {
         console.log('No authentication token found, skipping MFA status check');
@@ -146,8 +142,7 @@ const SettingsPage = ({ user, masterKey, onLogout, credentials, decryptPassword 
 
     loadExistingBackupCodes();
   }, [user?.email]);
-  
-  // Appearance settings state - With localStorage persistence
+
   const [theme, setTheme] = useState(() => {
     const savedTheme = localStorage.getItem('securevault_theme');
     return savedTheme || 'light';
@@ -161,9 +156,7 @@ const SettingsPage = ({ user, masterKey, onLogout, credentials, decryptPassword 
     return savedCompactMode === 'true';
   });
 
-  // Apply appearance settings on component mount
   useEffect(() => {
-    // Apply current theme settings
     const root = document.documentElement;
     
     // Apply theme
@@ -200,9 +193,7 @@ const SettingsPage = ({ user, masterKey, onLogout, credentials, decryptPassword 
     }
   }, [theme]);
 
-  // Separate effect for font size changes
   useEffect(() => {
-    // Apply font size to document
     const root = document.documentElement;
     root.classList.remove('text-size-small', 'text-size-medium', 'text-size-large');
     root.classList.add(`text-size-${fontSize}`);
@@ -219,7 +210,6 @@ const SettingsPage = ({ user, masterKey, onLogout, credentials, decryptPassword 
     }
   }, [compactMode]);
 
-  // Listen for system theme changes
   useEffect(() => {
     if (theme === 'system') {
       const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');

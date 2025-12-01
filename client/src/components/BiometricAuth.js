@@ -49,13 +49,11 @@ const BiometricAuth = ({ onAuthenticate, onCancel, isEnabled = false, masterKey 
 
       setSupportDetails(details);
 
-      // Check if Web Authentication API is supported
       if (!details.webAuthn) {
         setIsSupported(false);
         return;
       }
 
-      // Check if biometric authentication is available
       if (typeof window.PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable === 'function') {
         try {
           const available = await window.PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable();
@@ -64,12 +62,10 @@ const BiometricAuth = ({ onAuthenticate, onCancel, isEnabled = false, masterKey 
           setIsSupported(available);
 
           if (available) {
-            // Determine available methods
             const methods = [];
             if (typeof window.PublicKeyCredential.isConditionalMediationAvailable === 'function') {
               methods.push('fingerprint');
             }
-            // Face ID is typically available on devices with TrueDepth camera
             if (navigator.userAgent.includes('iPhone') || navigator.userAgent.includes('iPad')) {
               methods.push('faceid');
             }
@@ -96,7 +92,6 @@ const BiometricAuth = ({ onAuthenticate, onCancel, isEnabled = false, masterKey 
       return;
     }
 
-    // Check if master key is available (required for decryption)
     if (!masterKey || masterKey.length < 8) {
       toast.error('Master key is required to setup biometric authentication');
       return;
@@ -106,16 +101,11 @@ const BiometricAuth = ({ onAuthenticate, onCancel, isEnabled = false, masterKey 
     setError(null);
 
     try {
-      // Get the current user email from localStorage
       const userEmail = localStorage.getItem('securevault_user') ? 
         JSON.parse(localStorage.getItem('securevault_user')).email : 'user@securevault.com';
 
-      // Fetch server-provided registration (attestation) options (if exposed)
-      // Fallback to local minimal options if not available
       let creationOptions;
       try {
-        // Optional: if backend provides dedicated registration endpoint, call it here
-        // Otherwise, construct client-side options
         creationOptions = {
           publicKey: {
             rp: { name: 'SecureVault', id: window.location.hostname || 'localhost' },
@@ -138,8 +128,6 @@ const BiometricAuth = ({ onAuthenticate, onCancel, isEnabled = false, masterKey 
         throw new Error('Failed to create biometric credential - user may have cancelled');
       }
 
-
-      // Store credential locally
       const credentialData = {
         id: credential.id,
         type: credential.type,

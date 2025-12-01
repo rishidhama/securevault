@@ -74,36 +74,29 @@ const credentialSchema = new mongoose.Schema({
   toObject: { virtuals: true }
 });
 
-// Indexes for better performance
-credentialSchema.index({ userId: 1 }); // Index for user isolation
+credentialSchema.index({ userId: 1 });
 credentialSchema.index({ title: 'text', username: 'text', notes: 'text' });
 credentialSchema.index({ category: 1 });
 credentialSchema.index({ isFavorite: 1 });
 credentialSchema.index({ createdAt: -1 });
 
-// Virtual for password strength (if we want to store it)
 credentialSchema.virtual('passwordStrength').get(function() {
-  // This would be calculated on the client side
   return null;
 });
 
-// Pre-save middleware to update lastModified
 credentialSchema.pre('save', function(next) {
   this.lastModified = new Date();
   next();
 });
 
-// Static method to get credentials by category
 credentialSchema.statics.getByCategory = function(category) {
   return this.find({ category: category }).sort({ createdAt: -1 });
 };
 
-// Static method to get favorite credentials
 credentialSchema.statics.getFavorites = function() {
   return this.find({ isFavorite: true }).sort({ createdAt: -1 });
 };
 
-// Instance method to toggle favorite status
 credentialSchema.methods.toggleFavorite = function() {
   this.isFavorite = !this.isFavorite;
   return this.save();
