@@ -38,7 +38,7 @@ const Landing = () => {
             </Link>
           </div>
           <ul className="mt-8 space-y-3">
-            {["Client-side AES-256-GCM encryption", "Zero-knowledge architeGCMre", "Modern, responsive UI", "Open, extensible API"].map((item) => (
+            {["Client-side AES-256-GCM encryption", "Zero-knowledge architecture", "Modern, responsive UI", "Open, extensible API"].map((item) => (
               <li key={item} className="flex items-center gap-3 text-secondary-700">
                 <CheckCircle className="w-5 h-5 text-success-600" />
                 {item}
