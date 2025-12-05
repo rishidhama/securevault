@@ -1,17 +1,8 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
-/**
- * @title VaultIntegrityAnchor
- * @dev Tamper-evident storage for password vault integrity hashes.
- * 
- * Security model: Only stores Merkle roots of audit events, never plaintext
- * or encrypted credentials. Provides cryptographic proof of data integrity
- * without compromising user privacy.
- * 
- * Gas optimization: Uses string mapping for user IDs to reduce storage costs
- * on testnets. Production deployment would use bytes32 for better efficiency.
- */
+// Stores integrity hashes for password vaults
+// Only stores hashes, never plaintext or encrypted data
 contract PasswordVault {
     struct VaultHash {
         string userId;
@@ -21,11 +12,9 @@ contract PasswordVault {
     }
 
     mapping(string => VaultHash) public vaults;
-
     mapping(bytes32 => bool) private userSeen;
     uint256 private vaultCount;
 
-    // Events
     event VaultUpdated(string indexed userId, string vaultHash, uint256 timestamp);
     event VaultDeleted(string indexed userId, uint256 timestamp);
 
@@ -40,23 +29,15 @@ contract PasswordVault {
         owner = msg.sender;
     }
 
-    /**
-     * @dev Update or create a vault hash for a user
-     * @param userId The user identifier (e.g., email or UUID)
-     * @param vaultHash The hash (e.g., SHA-256) of the user's encrypted vault blob
-     */
+    // Update or create vault hash for a user
     function updateVaultHash(string memory userId, string memory vaultHash) public {
         require(bytes(userId).length > 0, "userId empty");
         require(bytes(vaultHash).length > 0, "vaultHash empty");
 
-        if (!vaults[userId].exists) {
-            bytes32 key = keccak256(bytes(userId));
-            if (!userSeen[key]) {
-                userSeen[key] = true;
-                vaultCount += 1;
-            } else {
-                vaultCount += 1;
-            }
+        bytes32 key = keccak256(bytes(userId));
+        if (!vaults[userId].exists && !userSeen[key]) {
+            userSeen[key] = true;
+            vaultCount += 1;
         }
 
         vaults[userId] = VaultHash({
@@ -69,13 +50,6 @@ contract PasswordVault {
         emit VaultUpdated(userId, vaultHash, block.timestamp);
     }
 
-    /**
-     * @dev Fetch vault data for a user
-     * @param userId The user identifier
-     * @return vaultHash Hash string
-     * @return timestamp Last updated time
-     * @return exists Whether a record exists
-     */
     function getVaultHash(string memory userId)
         public
         view
@@ -85,46 +59,28 @@ contract PasswordVault {
         return (v.vaultHash, v.timestamp, v.exists);
     }
 
-    /**
-     * @dev Delete a user's vault hash (admin-only)
-     */
+    // Admin only - delete vault hash
     function deleteVaultHash(string memory userId) public onlyOwner {
         require(vaults[userId].exists, "not found");
         delete vaults[userId];
-        // Decrement count on delete to reflect active records
         if (vaultCount > 0) {
             vaultCount -= 1;
         }
         emit VaultDeleted(userId, block.timestamp);
     }
 
-    /**
-     * @dev Returns active vault record count
-     */
     function getVaultCount() public view returns (uint256) {
         return vaultCount;
     }
 
-    /**
-     * @dev Has a userId ever been seen before (created once)?
-     */
     function hasEverExisted(string memory userId) public view returns (bool) {
         return userSeen[keccak256(bytes(userId))];
     }
 
-    /**
-     * @dev Transfer ownership
-     */
     function transferOwnership(address newOwner) public onlyOwner {
         require(newOwner != address(0), "zero addr");
         owner = newOwner;
     }
-
-    /**
-     * @dev Contract info
-     */
-    function getContractInfo() public pure returns (string memory contractName, string memory version) {
-        return ("PasswordVault", "1.1.0");
-    }
+}
 
 
