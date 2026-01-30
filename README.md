@@ -1,4 +1,4 @@
-# SecureVault - Zero-Knowledge Password Manager
+# SecureVault: A Zero-Knowledge Password Manager with Blockchain-Anchored Integrity
 
 A secure password management system combining client-side encryption with blockchain-anchored integrity verification.
 
@@ -20,21 +20,10 @@ A secure password management system combining client-side encryption with blockc
 ## Technical Details
 
 - **Encryption**: AES-256-GCM with unique IVs
-- **Key Derivation**: PBKDF2-HMAC-SHA256 (310k iterations)
+- **Key Derivation**: PBKDF2-HMAC-SHA256
 - **Integrity**: SHA-256 Merkle trees
 - **Blockchain**: Ethereum Sepolia testnet
 - **Database**: MongoDB for encrypted storage
-
-## Getting Started
-
-1. Clone this repository
-2. Install dependencies: `npm run install-all`
-3. Configure environment variables (see `env.example`)
-4. Run development server: `npm run dev`
-
-## Support
-
-For questions about this project, please contact the development team.
 
 ---
 
