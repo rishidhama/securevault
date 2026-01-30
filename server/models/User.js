@@ -4,7 +4,7 @@ const bcrypt = require('bcryptjs');
 const userSchema = new mongoose.Schema({
   email: {
     type: String,
-    required: [true, 'Email is required'],
+    required: true,
     unique: true,
     lowercase: true,
     trim: true,
@@ -12,13 +12,13 @@ const userSchema = new mongoose.Schema({
   },
   name: {
     type: String,
-    required: [true, 'Name is required'],
+    required: true,
     trim: true,
-    maxlength: [100, 'Name cannot exceed 100 characters']
+    maxlength: 100
   },
   masterKeyHash: {
     type: String,
-    required: [true, 'Master key hash is required']
+    required: true
   },
   mfaEnabled: {
     type: Boolean,
@@ -34,7 +34,7 @@ const userSchema = new mongoose.Schema({
   },
   mfaSecret: {
     type: String,
-    select: false // Don't include in queries by default
+    select: false
   },
   mfaBackupCodes: [{
     code: String,
@@ -86,7 +86,7 @@ userSchema.index({ createdAt: -1 });
 
 userSchema.pre('save', async function(next) {
   if (this.isModified('masterKeyHash')) {
-    const serverSalt = process.env.SERVER_SALT || 'securevault-server-salt-2024';
+    const serverSalt = process.env.SERVER_SALT || 'securevault-server-salt-2025';
     const saltedKey = this.masterKeyHash + serverSalt;
     this.masterKeyHash = await bcrypt.hash(saltedKey, 12);
   }
