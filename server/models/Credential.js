@@ -4,57 +4,57 @@ const credentialSchema = new mongoose.Schema({
   userId: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'User',
-    required: [true, 'User ID is required']
+    required: true
   },
   title: {
     type: String,
-    required: [true, 'Title is required'],
+    required:true,
     trim: true,
-    maxlength: [100, 'Title cannot exceed 100 characters']
+    maxlength: 100
   },
   username: {
     type: String,
-    required: [true, 'Username is required'],
+    required: true,
     trim: true,
-    maxlength: [200, 'Username cannot exceed 200 characters']
+    maxlength: 200
   },
   encryptedPassword: {
     type: String,
-    required: [true, 'Encrypted password is required'],
-    maxlength: [1000, 'Encrypted password is too long']
+    required: true,
+    maxlength: 1000
   },
   iv: {
     type: String,
-    required: [true, 'Initialization vector is required'],
-    maxlength: [100, 'IV is too long']
+    required: true,
+    maxlength: 100
   },
   salt: {
     type: String,
-    required: [true, 'Salt is required'],
-    maxlength: [100, 'Salt is too long']
+    required: true,
+    maxlength: 100
   },
   url: {
     type: String,
     trim: true,
-    maxlength: [500, 'URL cannot exceed 500 characters'],
+    maxlength: 500,
     default: ''
   },
   notes: {
     type: String,
     trim: true,
-    maxlength: [1000, 'Notes cannot exceed 1000 characters'],
+    maxlength: 1000,
     default: ''
   },
   category: {
     type: String,
     trim: true,
-    maxlength: [50, 'Category cannot exceed 50 characters'],
+    maxlength: 50,
     default: 'General'
   },
   tags: [{
     type: String,
     trim: true,
-    maxlength: [30, 'Tag cannot exceed 30 characters']
+    maxlength: 30
   }],
   isFavorite: {
     type: Boolean,
