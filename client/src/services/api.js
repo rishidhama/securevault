@@ -125,7 +125,28 @@ export const mfaAPI = {
 };
 
 export const credentialsAPI = {
-  list: () => apiRequest('/api/credentials'),
+  list: (options = {}) => {
+    // Support pagination: { page, limit } or { getAll: true } for backward compatibility
+    const params = new URLSearchParams();
+    if (options.getAll) {
+      params.append('getAll', 'true');
+    } else {
+      if (options.page) params.append('page', options.page);
+      if (options.limit) params.append('limit', options.limit);
+    }
+    // Preserve other query params
+    if (options.search) params.append('search', options.search);
+    if (options.category) params.append('category', options.category);
+    if (options.favorite) params.append('favorite', options.favorite);
+    if (options.sortBy) params.append('sortBy', options.sortBy);
+    if (options.sortOrder) params.append('sortOrder', options.sortOrder);
+    
+    const queryString = params.toString();
+    return apiRequest(`/api/credentials${queryString ? `?${queryString}` : ''}`);
+  },
+  
+  // Helper method to get all credentials (backward compatibility)
+  listAll: () => apiRequest('/api/credentials?getAll=true'),
   
   stats: () => apiRequest('/api/credentials/stats/overview'),
   

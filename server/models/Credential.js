@@ -79,6 +79,11 @@ credentialSchema.index({ title: 'text', username: 'text', notes: 'text' });
 credentialSchema.index({ category: 1 });
 credentialSchema.index({ isFavorite: 1 });
 credentialSchema.index({ createdAt: -1 });
+// Performance: Compound indexes for common query patterns
+credentialSchema.index({ userId: 1, createdAt: -1 }); // Most common: get user's credentials sorted by date
+credentialSchema.index({ userId: 1, category: 1 }); // Filter by category
+credentialSchema.index({ userId: 1, isFavorite: 1 }); // Filter favorites
+credentialSchema.index({ userId: 1, createdAt: -1, category: 1 }); // Combined filter + sort
 
 credentialSchema.virtual('passwordStrength').get(function() {
   return null;

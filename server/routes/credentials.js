@@ -161,10 +161,19 @@ const validatePartialUpdate = [
     .withMessage('isFavorite must be a boolean')
 ];
 
-// GET all credentials
+// GET all credentials with pagination support
 router.get('/', authenticateToken, async (req, res) => {
   try {
-    const { search, category, favorite, sortBy = 'createdAt', sortOrder = 'desc' } = req.query;
+    const { 
+      search, 
+      category, 
+      favorite, 
+      sortBy = 'createdAt', 
+      sortOrder = 'desc',
+      page,
+      limit,
+      getAll = 'false' // Set to 'true' to bypass pagination and get all
+    } = req.query;
     
     let query = { userId: req.user.userId };
     
@@ -187,12 +196,49 @@ router.get('/', authenticateToken, async (req, res) => {
     const sortOptions = {};
     sortOptions[sortBy] = sortOrder === 'desc' ? -1 : 1;
     
-    const credentials = await Credential.find(query).sort(sortOptions);
+    // Performance: Pagination support - default limit 200 for better performance
+    // Set getAll=true to get all credentials (backward compatibility)
+    const shouldPaginate = getAll !== 'true';
+    const pageNum = parseInt(page, 10) || 1;
+    const limitNum = shouldPaginate ? (parseInt(limit, 10) || 100) : null;
+    const skip = shouldPaginate ? (pageNum - 1) * limitNum : 0;
+    
+    // Get total count for pagination metadata
+    const totalCount = await Credential.countDocuments(query);
+    
+    // Build query with pagination
+    let queryBuilder = Credential.find(query)
+      .select('_id title username encryptedPassword iv salt url notes category tags isFavorite createdAt lastModified')
+      .sort(sortOptions)
+      .lean()
+      .maxTimeMS(5000); // Performance: Timeout after 5s to prevent hanging queries
+    
+    if (shouldPaginate && limitNum) {
+      queryBuilder = queryBuilder.skip(skip).limit(limitNum);
+    }
+    
+    const credentials = await queryBuilder;
+    
+    // Calculate pagination metadata
+    const totalPages = shouldPaginate && limitNum ? Math.ceil(totalCount / limitNum) : 1;
+    const hasNextPage = shouldPaginate && limitNum ? pageNum < totalPages : false;
+    const hasPrevPage = shouldPaginate && limitNum ? pageNum > 1 : false;
     
     res.json({
       success: true,
       data: credentials,
-      count: credentials.length
+      count: credentials.length,
+      pagination: shouldPaginate ? {
+        page: pageNum,
+        limit: limitNum,
+        total: totalCount,
+        totalPages,
+        hasNextPage,
+        hasPrevPage
+      } : {
+        total: totalCount,
+        getAll: true
+      }
     });
   } catch (error) {
     console.error('Error fetching credentials:', error);
