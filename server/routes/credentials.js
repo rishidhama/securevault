@@ -63,7 +63,7 @@ const createBlockchainEvent = async (userId, action, credentialId, credentialDat
     
     console.log(`Blockchain event logged: ${action} credential ${credentialId}`, {
       queued: result.queued || false,
-      queueSize: result.queueSize || null,
+      pendingCount: typeof result.pendingCount === 'number' ? result.pendingCount : null,
       txHash: result.txHash || null,
       etherscanUrl: result.etherscanUrl || null,
       vaultHash: vaultHash

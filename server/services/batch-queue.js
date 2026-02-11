@@ -1,41 +1,77 @@
 /**
  * Batch Queue Service for Blockchain Updates
  * 
- * Collects multiple vault hash updates and sends them in batches
- * to reduce gas costs on L2 networks (Arbitrum).
+ * Hybrid batching for blockchain vault-hash anchoring.
+ *
+ * Goals:
+ * - Reduce transaction spam by coalescing rapid updates (store only latest hash per user).
+ * - Support hybrid flush policy: flush when there are 10-20 updates OR after 30 minutes.
+ * - Time-based flush should only happen if there are pending changes.
+ * - Work on both L1 (legacy contract) and L2 (Arbitrum bytes32 contract).
+ *
+ * Behavior:
+ * - L2 (`CONTRACT_VERSION=l2`): uses on-chain batch method when flushing multiple users.
+ * - L1/legacy: flushes individually, but still coalesces to latest hash per user.
  * 
  * Features:
- * - Time-based batching (flush every N seconds)
- * - Size-based batching (flush when queue reaches N items)
- * - Automatic fallback to individual updates if batch fails
- * - Per-user queue management
+ * - Hybrid trigger: >= minUpdates (default 10) OR >= maxUpdates (default 20) OR maxWaitMs (default 30min)
+ * - Coalescing: repeated updates for the same user only keep the latest vaultHash
+ * - Automatic fallback to individual updates if L2 batch fails
+ * - Per-user queue management + stats
  */
 
 const ethereumService = require('./ethereum-service');
 
 class BatchQueue {
   constructor() {
-    // Queue: userId -> [{ userId, vaultHash, timestamp, retries }]
-    this.queue = new Map();
+    /**
+     * Pending state per user:
+     * userId -> {
+     *   userId,
+     *   latestVaultHash,
+     *   pendingCount,       // number of distinct hash changes since last flush
+     *   firstPendingAt,     // when current pending window started
+     *   lastChangedAt,      // last time vaultHash changed
+     *   lastSeenAt,         // last queueUpdate call time (even if no hash change)
+     *   retries
+     * }
+     */
+    this.pending = new Map();
     
     // Configuration
-    this.batchSize = parseInt(process.env.BATCH_SIZE || '10', 10); // Max items per batch
-    this.batchInterval = parseInt(process.env.BATCH_INTERVAL || '5000', 10); // Flush every 5 seconds
-    this.maxRetries = 3;
+    this.minUpdates = parseInt(process.env.BATCH_MIN_UPDATES || '10', 10);
+    this.maxUpdates = parseInt(process.env.BATCH_MAX_UPDATES || '20', 10);
+    // Flush check tick (not the max wait). Keep relatively small; it won't flush if no pending changes.
+    this.checkIntervalMs = parseInt(process.env.BATCH_CHECK_INTERVAL || '30000', 10); // 30s
+    this.maxWaitMs = parseInt(process.env.BATCH_MAX_WAIT_MS || String(30 * 60 * 1000), 10); // 30 minutes
+    this.maxRetries = parseInt(process.env.BATCH_MAX_RETRIES || '3', 10);
     
-    // Flush timer
-    this.flushTimer = null;
+    // Periodic check timer
+    this.checkTimer = null;
     
     // Statistics
     this.stats = {
-      totalQueued: 0,
+      totalQueued: 0, // queueUpdate calls
+      totalChanged: 0, // distinct hash changes (pendingCount increments)
       totalBatched: 0,
       totalIndividual: 0,
       totalFailed: 0
     };
     
-    // Start periodic flush
-    this.startFlushTimer();
+    // Start periodic check
+    this.startCheckTimer();
+  }
+
+  _now() {
+    return Date.now();
+  }
+
+  _contractVersion() {
+    return process.env.CONTRACT_VERSION || 'legacy';
+  }
+
+  _isBatchEnabled() {
+    return process.env.BATCH_ENABLED === 'true';
   }
 
   /**
@@ -50,133 +86,173 @@ class BatchQueue {
       return { success: true, queued: false, reason: 'blockchain_disabled' };
     }
 
-    // Check if batch updates are supported (L2 contract)
-    const contractVersion = process.env.CONTRACT_VERSION || 'legacy';
-    if (contractVersion !== 'l2') {
-      // Fallback to individual update for legacy contracts
+    // If batching is disabled, flush immediately (works for both L1 and L2)
+    if (!this._isBatchEnabled()) {
       return this.flushImmediate(userId, vaultHash);
     }
 
-    // Add to queue
-    if (!this.queue.has(userId)) {
-      this.queue.set(userId, []);
+    const now = this._now();
+    const existing = this.pending.get(userId);
+    const prevHash = existing ? existing.latestVaultHash : null;
+    const changed = prevHash !== vaultHash;
+
+    if (!existing) {
+      this.pending.set(userId, {
+        userId,
+        latestVaultHash: vaultHash,
+        pendingCount: changed ? 1 : 0,
+        firstPendingAt: changed ? now : null,
+        lastChangedAt: changed ? now : null,
+        lastSeenAt: now,
+        retries: 0
+      });
+    } else {
+      existing.lastSeenAt = now;
+      if (changed) {
+        existing.latestVaultHash = vaultHash;
+        existing.pendingCount += 1;
+        existing.lastChangedAt = now;
+        if (!existing.firstPendingAt) existing.firstPendingAt = now;
+      }
     }
 
-    const userQueue = this.queue.get(userId);
-    userQueue.push({
-      userId,
-      vaultHash,
-      timestamp: Date.now(),
-      retries: 0
-    });
-
     this.stats.totalQueued++;
+    if (changed) this.stats.totalChanged++;
 
-    // Check if we should flush immediately (batch size reached)
-    if (userQueue.length >= this.batchSize) {
-      await this.flushUserQueue(userId);
+    // Flush immediately if user pendingCount hits maxUpdates (upper bound of hybrid window)
+    const state = this.pending.get(userId);
+    if (state && state.pendingCount >= this.maxUpdates) {
+      await this.flushDueUsers({ forceUserId: userId });
     }
 
     return {
       success: true,
       queued: true,
-      queueSize: userQueue.length
+      changed,
+      pendingCount: state ? state.pendingCount : 0
     };
   }
 
   /**
-   * Flush a specific user's queue
+   * Determine whether a user's pending state is due for flush.
+   * @param {object} s - pending state
+   * @param {number} now - current time
+   * @returns {boolean}
+   */
+  _isDue(s, now) {
+    if (!s || !s.latestVaultHash) return false;
+    if (!s.pendingCount || s.pendingCount <= 0) return false; // only flush if there were changes
+    if (s.pendingCount >= this.maxUpdates) return true;
+    const age = s.firstPendingAt ? (now - s.firstPendingAt) : 0;
+    if (age >= this.maxWaitMs) return true;
+    // For size-based hybrid: allow flush at minUpdates during periodic checks
+    if (s.pendingCount >= this.minUpdates) return true;
+    return false;
+  }
+
+  /**
+   * Flush due users.
+   * - L2: try batch across multiple users (up to maxUpdates users per tx); fallback to individual.
+   * - L1: individual updates only (still coalesced).
+   *
+   * @param {{forceUserId?: string}} opts
+   */
+  async flushDueUsers(opts = {}) {
+    const now = this._now();
+    const contractVersion = this._contractVersion();
+
+    // Build list of due user states
+    const dueStates = [];
+    for (const s of this.pending.values()) {
+      if (opts.forceUserId && s.userId !== opts.forceUserId) continue;
+      if (this._isDue(s, now)) dueStates.push(s);
+    }
+    if (dueStates.length === 0) return { success: true, flushed: 0, mode: 'noop' };
+
+    // Sort by oldest pending window first
+    dueStates.sort((a, b) => (a.firstPendingAt || 0) - (b.firstPendingAt || 0));
+
+    // Limit per flush cycle (avoid giant tx / long loop). Use maxUpdates as a natural cap.
+    const slice = dueStates.slice(0, Math.max(1, this.maxUpdates));
+
+    if (contractVersion === 'l2' && slice.length > 1) {
+      // Try L2 batch update (multi-user)
+      const updates = slice.map(s => ({ userId: s.userId, vaultHash: s.latestVaultHash }));
+      try {
+        const result = await ethereumService.batchStoreVaultHash(updates);
+        if (!result.success) throw new Error(result.error || 'Batch update failed');
+
+        // Mark flushed
+        for (const s of slice) this._markFlushed(s.userId);
+        this.stats.totalBatched += slice.length;
+        // eslint-disable-next-line no-console
+        console.log(`Batch update successful: ${slice.length} users, tx: ${result.txHash}`);
+        return { success: true, flushed: slice.length, mode: 'batch', txHash: result.txHash };
+      } catch (error) {
+        // eslint-disable-next-line no-console
+        console.error(`Batch update failed:`, error.message);
+        // Fallback to individual (coalesced)
+        await this._flushIndividually(slice);
+        return { success: false, flushed: slice.length, mode: 'fallback_individual', error: error.message };
+      }
+    }
+
+    // L1 or single-user: flush individually
+    await this._flushIndividually(slice);
+    return { success: true, flushed: slice.length, mode: 'individual' };
+  }
+
+  _markFlushed(userId) {
+    const s = this.pending.get(userId);
+    if (!s) return;
+    s.pendingCount = 0;
+    s.firstPendingAt = null;
+    s.lastChangedAt = null;
+    s.retries = 0;
+    // keep latestVaultHash and lastSeenAt for observability
+  }
+
+  async _flushIndividually(states) {
+    const promises = states.map(async (s) => {
+      try {
+        const r = await ethereumService.storeVaultHash(s.userId, s.latestVaultHash);
+        if (r && r.success) {
+          this.stats.totalIndividual += 1;
+          this._markFlushed(s.userId);
+        } else {
+          this.stats.totalFailed += 1;
+        }
+        return r;
+      } catch (e) {
+        this.stats.totalFailed += 1;
+        return { success: false, error: e.message };
+      }
+    });
+    await Promise.allSettled(promises);
+  }
+
+  /**
+   * Flush a specific user's pending update (if due or forced by caller).
    * @param {string} userId - User identifier
    * @returns {Promise<Object>} Flush result
    */
   async flushUserQueue(userId) {
-    const userQueue = this.queue.get(userId);
-    if (!userQueue || userQueue.length === 0) {
-      return { success: true, flushed: 0 };
-    }
-
-    // Take items from queue (up to batchSize)
-    const itemsToFlush = userQueue.splice(0, this.batchSize);
-    
-    if (itemsToFlush.length === 0) {
-      return { success: true, flushed: 0 };
-    }
-
+    // For API callers, treat as "force flush if there are pending changes"
+    const s = this.pending.get(userId);
+    if (!s || !s.pendingCount) return { success: true, flushed: 0 };
     try {
-      // Prepare batch update
-      const updates = itemsToFlush.map(item => ({
-        userId: item.userId,
-        vaultHash: item.vaultHash
-      }));
-
-      // Try batch update
-      const result = await ethereumService.batchStoreVaultHash(updates);
-
-      if (result.success) {
-        this.stats.totalBatched += itemsToFlush.length;
-        console.log(`Batch update successful: ${itemsToFlush.length} items, tx: ${result.txHash}`);
-        
-        return {
-          success: true,
-          flushed: itemsToFlush.length,
-          txHash: result.txHash,
-          batchSize: itemsToFlush.length
-        };
+      const r = await ethereumService.storeVaultHash(userId, s.latestVaultHash);
+      if (r && r.success) {
+        this.stats.totalIndividual += 1;
+        this._markFlushed(userId);
       } else {
-        throw new Error(result.error || 'Batch update failed');
+        this.stats.totalFailed += 1;
       }
-
-    } catch (error) {
-      console.error(`Batch update failed for user ${userId}:`, error.message);
-      
-      // Retry logic: put items back in queue if retries < maxRetries
-      const retryItems = itemsToFlush.filter(item => {
-        item.retries++;
-        return item.retries < this.maxRetries;
-      });
-
-      if (retryItems.length > 0) {
-        // Put retry items back at the front of the queue
-        this.queue.set(userId, [...retryItems, ...userQueue]);
-        console.log(`Queued ${retryItems.length} items for retry`);
-      } else {
-        // Max retries reached, fallback to individual updates
-        console.log(`Max retries reached, falling back to individual updates`);
-        await this.fallbackToIndividual(itemsToFlush);
-      }
-
-      this.stats.totalFailed += itemsToFlush.length - retryItems.length;
-
-      return {
-        success: false,
-        flushed: 0,
-        error: error.message,
-        fallback: itemsToFlush.length - retryItems.length
-      };
+      return { success: !!(r && r.success), flushed: r && r.success ? 1 : 0, txHash: r ? r.txHash : null };
+    } catch (e) {
+      this.stats.totalFailed += 1;
+      return { success: false, flushed: 0, error: e.message };
     }
-  }
-
-  /**
-   * Fallback to individual updates when batch fails
-   * @param {Array} items - Items to update individually
-   */
-  async fallbackToIndividual(items) {
-    console.log(`Falling back to individual updates for ${items.length} items`);
-    
-    const promises = items.map(item => 
-      ethereumService.storeVaultHash(item.userId, item.vaultHash)
-        .catch(err => {
-          console.error(`Individual update failed for ${item.userId}:`, err.message);
-          this.stats.totalFailed++;
-          return { success: false, error: err.message };
-        })
-    );
-
-    const results = await Promise.allSettled(promises);
-    const successful = results.filter(r => r.status === 'fulfilled' && r.value.success).length;
-    
-    this.stats.totalIndividual += successful;
-    console.log(`Individual updates: ${successful}/${items.length} successful`);
   }
 
   /**
@@ -184,18 +260,7 @@ class BatchQueue {
    * @returns {Promise<Object>} Flush results
    */
   async flushAll() {
-    const userIds = Array.from(this.queue.keys());
-    const results = await Promise.allSettled(
-      userIds.map(userId => this.flushUserQueue(userId))
-    );
-
-    const summary = {
-      totalUsers: userIds.length,
-      successful: results.filter(r => r.status === 'fulfilled' && r.value.success).length,
-      failed: results.filter(r => r.status === 'rejected' || !r.value.success).length
-    };
-
-    return summary;
+    return this.flushDueUsers();
   }
 
   /**
@@ -219,32 +284,45 @@ class BatchQueue {
   }
 
   /**
-   * Start periodic flush timer
+   * Start periodic due-check timer.
+   * Important: this does NOT flush unless there are pending changes.
    */
-  startFlushTimer() {
-    if (this.flushTimer) {
-      clearInterval(this.flushTimer);
+  startCheckTimer() {
+    if (this.checkTimer) {
+      clearInterval(this.checkTimer);
     }
 
-    this.flushTimer = setInterval(async () => {
+    this.checkTimer = setInterval(async () => {
       try {
-        await this.flushAll();
+        // Only act if there is anything pending at all
+        if (this.getTotalPendingCount() > 0) {
+          await this.flushDueUsers();
+        }
       } catch (error) {
         console.error('Periodic flush error:', error.message);
       }
-    }, this.batchInterval);
+    }, this.checkIntervalMs);
 
-    console.log(`Batch queue started: flush every ${this.batchInterval}ms, batch size: ${this.batchSize}`);
+    console.log(
+      `Batch queue started: check every ${this.checkIntervalMs}ms, hybrid window ${this.minUpdates}-${this.maxUpdates} updates or ${this.maxWaitMs}ms`
+    );
   }
 
   /**
-   * Stop flush timer
+   * Stop check timer
    */
   stopFlushTimer() {
-    if (this.flushTimer) {
-      clearInterval(this.flushTimer);
-      this.flushTimer = null;
+    // Back-compat name
+    if (this.checkTimer) {
+      clearInterval(this.checkTimer);
+      this.checkTimer = null;
     }
+  }
+
+  getTotalPendingCount() {
+    let total = 0;
+    for (const s of this.pending.values()) total += (s.pendingCount || 0);
+    return total;
   }
 
   /**
@@ -252,18 +330,23 @@ class BatchQueue {
    * @returns {Object} Statistics
    */
   getStats() {
-    const queueSizes = Array.from(this.queue.entries()).map(([userId, items]) => ({
-      userId,
-      queueSize: items.length
+    const pendingUsers = Array.from(this.pending.values()).map((s) => ({
+      userId: s.userId,
+      pendingCount: s.pendingCount || 0,
+      firstPendingAt: s.firstPendingAt,
+      lastChangedAt: s.lastChangedAt,
+      lastSeenAt: s.lastSeenAt
     }));
 
     return {
       ...this.stats,
-      currentQueueSizes: queueSizes,
-      totalQueuedNow: queueSizes.reduce((sum, q) => sum + q.queueSize, 0),
+      pendingUsers,
+      totalPendingNow: this.getTotalPendingCount(),
       config: {
-        batchSize: this.batchSize,
-        batchInterval: this.batchInterval,
+        minUpdates: this.minUpdates,
+        maxUpdates: this.maxUpdates,
+        checkIntervalMs: this.checkIntervalMs,
+        maxWaitMs: this.maxWaitMs,
         maxRetries: this.maxRetries
       }
     };
@@ -275,8 +358,8 @@ class BatchQueue {
    * @returns {number} Queue size
    */
   getQueueSize(userId) {
-    const userQueue = this.queue.get(userId);
-    return userQueue ? userQueue.length : 0;
+    const s = this.pending.get(userId);
+    return s ? (s.pendingCount || 0) : 0;
   }
 
   /**
@@ -284,14 +367,14 @@ class BatchQueue {
    * @param {string} userId - User identifier
    */
   clearUserQueue(userId) {
-    this.queue.delete(userId);
+    this.pending.delete(userId);
   }
 
   /**
    * Clear all queues
    */
   clearAll() {
-    this.queue.clear();
+    this.pending.clear();
   }
 }
 

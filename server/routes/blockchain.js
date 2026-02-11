@@ -74,7 +74,7 @@ router.post('/store-vault', authenticateToken, async (req, res) => {
           userId,
           vaultHash,
           queued: result.queued || false,
-          queueSize: result.queueSize || batchQueue.getQueueSize(userId),
+          pendingCount: typeof result.pendingCount === 'number' ? result.pendingCount : batchQueue.getQueueSize(userId),
           txHash: result.txHash || null,
           blockNumber: result.blockNumber || null,
           gasUsed: result.gasUsed || null,
