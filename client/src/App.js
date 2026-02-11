@@ -20,6 +20,7 @@ import BiometricAuth from './components/BiometricAuth';
 import BackupCodesManager from './components/BackupCodesManager';
 import BreachMonitor from './components/BreachMonitor';
 import SmartCategories from './components/SmartCategories';
+import BenchmarkRunner from './components/BenchmarkRunner';
 
 import { credentialsAPI, blockchainAPI } from './services/api';
 import encryptionService from './utils/encryption';
@@ -187,8 +188,10 @@ function App() {
         setTimeout(() => reject(new Error('Data loading timeout')), 10000)
       );
       
+      // Performance: Load all credentials for initial display (backward compatible)
+      // Using getAll=true to bypass pagination for initial load
       const dataPromise = Promise.all([
-        credentialsAPI.list(),
+        credentialsAPI.listAll(), // Get all credentials for initial load
         credentialsAPI.stats(),
         credentialsAPI.categories()
       ]);
@@ -227,8 +230,23 @@ function App() {
       }
       
       setUser(authData.user);
-      setMasterKey(authData.masterKey || '');
+      const masterKey = authData.masterKey || '';
+      setMasterKey(masterKey);
       setIsAuthenticated(true);
+      
+      // Performance optimization: Initialize session vault key once per login
+      // This derives the key from masterKey + userSalt using PBKDF2 ONCE
+      // All subsequent encryptions use this pre-derived key (no PBKDF2 needed!)
+      if (masterKey && authData.user) {
+        try {
+          const userIdentifier = authData.user.email || authData.user.id;
+          const userSalt = encryptionService.getOrGenerateUserSalt(userIdentifier);
+          await encryptionService.initializeSessionVaultKey(masterKey, userSalt);
+          console.log('Session vault key initialized - PBKDF2 will only run once per login');
+        } catch (error) {
+          console.warn('Failed to initialize session vault key, will use legacy format:', error);
+        }
+      }
       
       const profilePromise = authAPI.profile();
       const timeoutPromise = new Promise((_, reject) => 
@@ -254,10 +272,23 @@ function App() {
     }
   };
 
-  const handleSignupSuccess = (authData) => {
+  const handleSignupSuccess = async (authData) => {
     setUser(authData.user);
-    setMasterKey(authData.masterKey);
+    const masterKey = authData.masterKey || '';
+    setMasterKey(masterKey);
     setIsAuthenticated(true);
+    
+    // Initialize session vault key for new users too
+    if (masterKey && authData.user) {
+      try {
+        const userIdentifier = authData.user.email || authData.user.id;
+        const userSalt = encryptionService.getOrGenerateUserSalt(userIdentifier);
+        await encryptionService.initializeSessionVaultKey(masterKey, userSalt);
+        console.log('Session vault key initialized for new user');
+      } catch (error) {
+        console.warn('Failed to initialize session vault key:', error);
+      }
+    }
   };
 
   const handleLogout = async () => {
@@ -269,6 +300,8 @@ function App() {
     } catch (error) {
       console.error('Logout error:', error);
     } finally {
+      // Clear encryption caches for security
+      encryptionService.clearCache();
       clearAuthData();
       setCredentials([]);
       setStats({ total: 0, favorites: 0, categories: 0 });
@@ -310,14 +343,23 @@ function App() {
 
       try { await encryptionService.warmDecryptCache([newCredentialData], masterKey); } catch (_) {}
 
-      try {
-        const updated = [newCredentialData, ...credentials];
-        const root = await computeMerkleRoot(updated);
-        if (root && user?.id) {
-          await blockchainAPI.storeVault(user.id, { merkleRoot: root });
-        }
-      } catch (e) {
-        console.log('Anchoring skipped/failed:', e?.message || e);
+      // Performance: Make blockchain anchoring async/non-blocking (don't wait for it)
+      // This prevents 12+ second delays on credential operations
+      if (user?.id) {
+        (async () => {
+          try {
+            const updated = [newCredentialData, ...credentials];
+            const root = await computeMerkleRoot(updated);
+            if (root) {
+              // Fire and forget - don't block the response
+              blockchainAPI.storeVault(user.id, { merkleRoot: root }).catch(err => {
+                console.log('Anchoring failed (non-blocking):', err?.message || err);
+              });
+            }
+          } catch (e) {
+            console.log('Anchoring skipped (non-blocking):', e?.message || e);
+          }
+        })();
       }
       
       return newCredentialData;
@@ -332,14 +374,21 @@ function App() {
       setCredentials(prev => prev.filter(cred => cred._id !== id));
       setStats(prev => ({ ...prev, total: prev.total - 1 }));
 
-      try {
-        const updated = credentials.filter(cred => cred._id !== id);
-        const root = await computeMerkleRoot(updated);
-        if (root && user?.id) {
-          await blockchainAPI.storeVault(user.id, { merkleRoot: root });
-        }
-      } catch (e) {
-        console.log('Anchoring skipped/failed:', e?.message || e);
+      // Performance: Make blockchain anchoring async/non-blocking
+      if (user?.id) {
+        (async () => {
+          try {
+            const updated = credentials.filter(cred => cred._id !== id);
+            const root = await computeMerkleRoot(updated);
+            if (root) {
+              blockchainAPI.storeVault(user.id, { merkleRoot: root }).catch(err => {
+                console.log('Anchoring failed (non-blocking):', err?.message || err);
+              });
+            }
+          } catch (e) {
+            console.log('Anchoring skipped (non-blocking):', e?.message || e);
+          }
+        })();
       }
     } catch (error) {
       throw error;
@@ -373,13 +422,20 @@ function App() {
         return updatedList;
       });
 
-      try {
-        const root = await computeMerkleRoot(updatedList || credentials);
-        if (root && user?.id) {
-          await blockchainAPI.storeVault(user.id, { merkleRoot: root });
-        }
-      } catch (e) {
-        console.log('Anchoring skipped/failed:', e?.message || e);
+      // Performance: Make blockchain anchoring async/non-blocking
+      if (user?.id) {
+        (async () => {
+          try {
+            const root = await computeMerkleRoot(updatedList || credentials);
+            if (root) {
+              blockchainAPI.storeVault(user.id, { merkleRoot: root }).catch(err => {
+                console.log('Anchoring failed (non-blocking):', err?.message || err);
+              });
+            }
+          } catch (e) {
+            console.log('Anchoring skipped (non-blocking):', e?.message || e);
+          }
+        })();
       }
       return response.data;
     } catch (error) {
@@ -419,6 +475,14 @@ function App() {
           <Route path="/login/master-key" element={<LoginMasterKey onLoginSuccess={handleLoginSuccess} />} />
           <Route path="/login/mfa" element={<LoginMFA onLoginSuccess={handleLoginSuccess} />} />
           <Route path="/signup" element={<Signup onSignupSuccess={handleSignupSuccess} />} />
+          <Route
+            path="/benchmark"
+            element={(
+              <div className="pt-16">
+                <BenchmarkRunner masterKey={masterKey} />
+              </div>
+            )}
+          />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
         <Toaster position="top-right" />
@@ -526,6 +590,12 @@ function App() {
                   onAddCredential={handleAddCredential}
                 />
               } 
+            />
+            <Route
+              path="/benchmark"
+              element={(
+                <BenchmarkRunner masterKey={masterKey} />
+              )}
             />
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>

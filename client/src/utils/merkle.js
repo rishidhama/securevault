@@ -52,15 +52,20 @@ export async function computeMerkleRoot(credentials) {
   const leaves = await Promise.all(credentials.map(leafHash));
   let level = leaves;
   while (level.length > 1) {
-    const next = [];
+    // Performance: Batch all hash operations in parallel instead of sequential
+    const pairs = [];
     for (let i = 0; i < level.length; i += 2) {
       const left = level[i];
       const right = i + 1 < level.length ? level[i + 1] : level[i]; // duplicate last if odd
-      const combined = pairConcatHex(left, right);
-      // eslint-disable-next-line no-await-in-loop
-      const parent = await sha256Hex(combined);
-      next.push(parent);
+      pairs.push({ left, right });
     }
+    // Process all pairs in parallel instead of sequentially
+    const next = await Promise.all(
+      pairs.map(({ left, right }) => {
+        const combined = pairConcatHex(left, right);
+        return sha256Hex(combined);
+      })
+    );
     level = next;
   }
   return level[0];
