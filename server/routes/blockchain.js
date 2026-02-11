@@ -4,6 +4,7 @@ const { authenticateToken } = require('./auth');
 const mongoose = require('mongoose');
 const ethereumService = require('../services/ethereum-service');
 const blockchainDecoder = require('../services/blockchain-decoder-persistent');
+const batchQueue = require('../services/batch-queue');
 const crypto = require('crypto');
 
 ethereumService.init().catch(console.error);
@@ -30,7 +31,7 @@ router.get('/status', async (req, res) => {
 
 router.post('/store-vault', authenticateToken, async (req, res) => {
   try {
-    const { userId, vaultData, merkleRoot } = req.body;
+    const { userId, vaultData, merkleRoot, immediate } = req.body;
     
     if (!userId || (!vaultData && !merkleRoot)) {
       return res.status(400).json({
@@ -45,19 +46,39 @@ router.post('/store-vault', authenticateToken, async (req, res) => {
         .update(JSON.stringify(vaultData))
         .digest('hex');
     
-    const result = await ethereumService.storeVaultHash(userId, vaultHash);
+    // Use batch queue unless immediate flag is set
+    let result;
+    if (immediate || process.env.BATCH_ENABLED !== 'true') {
+      // Immediate update (bypass queue)
+      result = await ethereumService.storeVaultHash(userId, vaultHash);
+    } else {
+      // Queue for batch update
+      result = await batchQueue.queueUpdate(userId, vaultHash);
+    }
     
     if (result.success) {
+      const network = await ethereumService.getNetworkInfo();
+      const networkName = network?.chainId === 42161 || network?.chainId === 421614 ? 'Arbitrum' : 'Sepolia';
+      const explorerBase = network?.chainId === 42161 
+        ? 'https://arbiscan.io' 
+        : network?.chainId === 421614
+        ? 'https://sepolia.arbiscan.io'
+        : 'https://sepolia.etherscan.io';
+      
       res.json({
         success: true,
-        message: 'Vault integrity root stored on Sepolia blockchain',
+        message: result.queued 
+          ? 'Vault hash queued for batch update' 
+          : 'Vault integrity root stored on blockchain',
         data: {
           userId,
           vaultHash,
-          txHash: result.txHash,
-          blockNumber: result.blockNumber,
-          gasUsed: result.gasUsed,
-          etherscanUrl: `https://sepolia.etherscan.io/tx/${result.txHash}`
+          queued: result.queued || false,
+          queueSize: result.queueSize || batchQueue.getQueueSize(userId),
+          txHash: result.txHash || null,
+          blockNumber: result.blockNumber || null,
+          gasUsed: result.gasUsed || null,
+          etherscanUrl: result.txHash ? `${explorerBase}/tx/${result.txHash}` : null
         }
       });
     } else {
@@ -225,6 +246,7 @@ router.post('/verify', authenticateToken, async (req, res) => {
 router.get('/stats', authenticateToken, async (req, res) => {
   try {
     const networkInfo = await ethereumService.getNetworkInfo();
+    const batchStats = batchQueue.getStats();
     
     if (!networkInfo || networkInfo.error) {
       return res.status(500).json({
@@ -232,6 +254,12 @@ router.get('/stats', authenticateToken, async (req, res) => {
         error: 'Failed to fetch network statistics'
       });
     }
+    
+    const explorerBase = networkInfo.chainId === 42161 
+      ? 'https://arbiscan.io' 
+      : networkInfo.chainId === 421614
+      ? 'https://sepolia.arbiscan.io'
+      : 'https://sepolia.etherscan.io';
     
     res.json({
       success: true,
@@ -242,10 +270,80 @@ router.get('/stats', authenticateToken, async (req, res) => {
         balance: networkInfo.balance,
         gasPrice: networkInfo.gasPrice,
         contractAddress: networkInfo.contractAddress,
-        etherscanUrl: `https://sepolia.etherscan.io/address/${networkInfo.contractAddress}`
+        contractVersion: process.env.CONTRACT_VERSION || 'legacy',
+        etherscanUrl: `${explorerBase}/address/${networkInfo.contractAddress}`,
+        batchQueue: {
+          enabled: process.env.BATCH_ENABLED === 'true',
+          stats: batchStats
+        }
       }
     });
     
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+// Batch queue management endpoints
+router.post('/batch/flush', authenticateToken, async (req, res) => {
+  try {
+    const { userId } = req.body;
+    
+    if (userId) {
+      // Flush specific user's queue
+      const result = await batchQueue.flushUserQueue(userId);
+      res.json({
+        success: true,
+        message: `Flushed queue for user ${userId}`,
+        data: result
+      });
+    } else {
+      // Flush all queues
+      const result = await batchQueue.flushAll();
+      res.json({
+        success: true,
+        message: 'Flushed all queues',
+        data: result
+      });
+    }
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+router.get('/batch/stats', authenticateToken, async (req, res) => {
+  try {
+    const stats = batchQueue.getStats();
+    res.json({
+      success: true,
+      data: stats
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+router.get('/batch/queue/:userId', authenticateToken, async (req, res) => {
+  try {
+    const { userId } = req.params;
+    const queueSize = batchQueue.getQueueSize(userId);
+    res.json({
+      success: true,
+      data: {
+        userId,
+        queueSize,
+        queued: queueSize > 0
+      }
+    });
   } catch (error) {
     res.status(500).json({
       success: false,

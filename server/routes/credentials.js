@@ -6,6 +6,7 @@ const router = express.Router();
 const { authenticateToken } = require('./auth');
 const ethereumService = require('../services/ethereum-service');
 const blockchainDecoder = require('../services/blockchain-decoder-persistent');
+const batchQueue = require('../services/batch-queue');
 
 const createBlockchainEvent = async (userId, action, credentialId, credentialData = null) => {
   try {
@@ -42,7 +43,11 @@ const createBlockchainEvent = async (userId, action, credentialId, credentialDat
       throw new Error('Generated vault hash is empty');
     }
 
-    const result = await ethereumService.storeVaultHash(userId, vaultHash);
+    // Use batch queue if enabled, otherwise immediate update
+    const useBatch = process.env.BATCH_ENABLED === 'true';
+    const result = useBatch 
+      ? await batchQueue.queueUpdate(userId, vaultHash)
+      : await ethereumService.storeVaultHash(userId, vaultHash);
     
     if (result.success && result.txHash) {
       await blockchainDecoder.storeOperationDetails(result.txHash, {
@@ -57,8 +62,10 @@ const createBlockchainEvent = async (userId, action, credentialId, credentialDat
     }
     
     console.log(`Blockchain event logged: ${action} credential ${credentialId}`, {
-      txHash: result.txHash,
-      etherscanUrl: result.etherscanUrl,
+      queued: result.queued || false,
+      queueSize: result.queueSize || null,
+      txHash: result.txHash || null,
+      etherscanUrl: result.etherscanUrl || null,
       vaultHash: vaultHash
     });
   } catch (error) {

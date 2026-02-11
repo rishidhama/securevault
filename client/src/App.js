@@ -347,16 +347,16 @@ function App() {
       // This prevents 12+ second delays on credential operations
       if (user?.id) {
         (async () => {
-          try {
-            const updated = [newCredentialData, ...credentials];
-            const root = await computeMerkleRoot(updated);
+      try {
+        const updated = [newCredentialData, ...credentials];
+        const root = await computeMerkleRoot(updated);
             if (root) {
               // Fire and forget - don't block the response
               blockchainAPI.storeVault(user.id, { merkleRoot: root }).catch(err => {
                 console.log('Anchoring failed (non-blocking):', err?.message || err);
               });
-            }
-          } catch (e) {
+        }
+      } catch (e) {
             console.log('Anchoring skipped (non-blocking):', e?.message || e);
           }
         })();
@@ -377,15 +377,15 @@ function App() {
       // Performance: Make blockchain anchoring async/non-blocking
       if (user?.id) {
         (async () => {
-          try {
-            const updated = credentials.filter(cred => cred._id !== id);
-            const root = await computeMerkleRoot(updated);
+      try {
+        const updated = credentials.filter(cred => cred._id !== id);
+        const root = await computeMerkleRoot(updated);
             if (root) {
               blockchainAPI.storeVault(user.id, { merkleRoot: root }).catch(err => {
                 console.log('Anchoring failed (non-blocking):', err?.message || err);
               });
-            }
-          } catch (e) {
+        }
+      } catch (e) {
             console.log('Anchoring skipped (non-blocking):', e?.message || e);
           }
         })();
@@ -425,14 +425,14 @@ function App() {
       // Performance: Make blockchain anchoring async/non-blocking
       if (user?.id) {
         (async () => {
-          try {
-            const root = await computeMerkleRoot(updatedList || credentials);
+      try {
+        const root = await computeMerkleRoot(updatedList || credentials);
             if (root) {
               blockchainAPI.storeVault(user.id, { merkleRoot: root }).catch(err => {
                 console.log('Anchoring failed (non-blocking):', err?.message || err);
               });
-            }
-          } catch (e) {
+        }
+      } catch (e) {
             console.log('Anchoring skipped (non-blocking):', e?.message || e);
           }
         })();

@@ -1,11 +1,16 @@
 const { ethers } = require('ethers');
 
 /**
- *  Blockchain Integrity Service
+ *  Blockchain Integrity Service (L2-Optimized)
  * 
- * Provides tamper-evident storage of vault integrity hashes on Ethereum.
- * Uses Sepolia testnet for cost-effective integrity anchoring without
- * storing sensitive data on-chain.
+ * Provides tamper-evident storage of vault integrity hashes on Ethereum L1/L2.
+ * Supports both legacy string-based contracts and L2-optimized bytes32 contracts.
+ * 
+ * L2 Optimizations (Arbitrum):
+ * - Uses bytes32 instead of strings: ~90% gas savings
+ * - Packed structs: 2 storage slots vs 4
+ * - Custom errors: ~50% cheaper than require strings
+ * - Batch updates: Multiple vaults in single transaction
  * 
  * Architecture decision: Only store Merkle roots of audit events, never
  * plaintext credentials or encrypted data. This provides tamper detection
@@ -14,13 +19,42 @@ const { ethers } = require('ethers');
 class VaultChain {
   constructor() {
     this.enabled = process.env.ETHEREUM_ENABLED === 'true';
-    this.rpcUrl = process.env.SEPOLIA_RPC_URL;
+    // Support both L1 (Sepolia) and L2 (Arbitrum) RPC URLs
+    this.rpcUrl = process.env.ARBITRUM_RPC_URL || process.env.SEPOLIA_RPC_URL;
     this.privateKey = process.env.WALLET_PRIVATE_KEY;
     this.contractAddress = process.env.CONTRACT_ADDRESS;
+    // Contract version: 'l2' for bytes32, 'legacy' for string-based
+    this.contractVersion = process.env.CONTRACT_VERSION || 'legacy';
     this.provider = null;
     this.wallet = null;
     this.contract = null;
     this.initialized = false;
+  }
+
+  /**
+   * Convert userId (string) to bytes32 hash
+   * @param {string} userId - User identifier (email, MongoDB ID, etc.)
+   * @returns {string} bytes32 hex string
+   */
+  hashUserId(userId) {
+    return ethers.utils.keccak256(ethers.utils.toUtf8Bytes(userId));
+  }
+
+  /**
+   * Convert hex string vaultHash to bytes32
+   * @param {string} vaultHash - Hex string (e.g., "0xabc123...")
+   * @returns {string} bytes32 hex string
+   */
+  hexToBytes32(vaultHash) {
+    // Remove '0x' prefix if present
+    const cleanHash = vaultHash.startsWith('0x') ? vaultHash.slice(2) : vaultHash;
+    
+    // Ensure it's 64 hex characters (32 bytes)
+    if (cleanHash.length !== 64) {
+      throw new Error(`Invalid hash length: expected 64 hex chars, got ${cleanHash.length}`);
+    }
+    
+    return '0x' + cleanHash;
   }
 
   async init() {
@@ -31,7 +65,7 @@ class VaultChain {
 
     try {
       if (!this.rpcUrl || !this.privateKey) {
-        throw new Error('Missing Ethereum configuration: SEPOLIA_RPC_URL, WALLET_PRIVATE_KEY');
+        throw new Error('Missing Ethereum configuration: RPC_URL (ARBITRUM_RPC_URL or SEPOLIA_RPC_URL), WALLET_PRIVATE_KEY');
       }
 
       this.provider = new ethers.providers.JsonRpcProvider(this.rpcUrl);
@@ -40,7 +74,12 @@ class VaultChain {
       const network = await this.provider.getNetwork();
       const balance = await this.wallet.getBalance();
       
-      console.log(`Connected to ${network.name} (Chain ID: ${network.chainId})`);
+      // Detect network type
+      const isArbitrum = network.chainId === 42161 || network.chainId === 421614; // Arbitrum One or Sepolia
+      const networkName = isArbitrum ? 'Arbitrum' : network.name;
+      
+      console.log(`Connected to ${networkName} (Chain ID: ${network.chainId})`);
+      console.log(`Contract version: ${this.contractVersion}`);
       console.log(`Wallet: ${this.wallet.address}`);
       console.log(`Balance: ${ethers.utils.formatEther(balance)} ETH`);
 
@@ -115,11 +154,27 @@ class VaultChain {
     try {
       console.log(`Connecting to existing contract: ${this.contractAddress}`);
       
-      const contractABI = [
-        'function updateVaultHash(string,string)',
-        'function getVaultHash(string) view returns(string,uint256,bool)',
-        'event VaultUpdated(string,uint256)'
-      ];
+      // Use different ABI based on contract version
+      let contractABI;
+      if (this.contractVersion === 'l2') {
+        // L2-optimized contract (bytes32)
+        contractABI = [
+          'function updateVaultHash(bytes32,bytes32)',
+          'function getVaultHash(bytes32) view returns(bytes32,uint64,bool)',
+          'function batchUpdateVaultHash(bytes32[],bytes32[])',
+          'function getVaultCount() view returns(uint256)',
+          'function hasEverExisted(bytes32) view returns(bool)',
+          'event VaultUpdated(bytes32 indexed,bytes32,uint64)',
+          'event VaultDeleted(bytes32 indexed,uint64)'
+        ];
+      } else {
+        // Legacy contract (string-based)
+        contractABI = [
+          'function updateVaultHash(string,string)',
+          'function getVaultHash(string) view returns(string,uint256,bool)',
+          'event VaultUpdated(string,uint256)'
+        ];
+      }
       
       this.contract = new ethers.Contract(this.contractAddress, contractABI, this.wallet);
       
@@ -129,7 +184,7 @@ class VaultChain {
         throw new Error('No contract found at specified address');
       }
       
-      console.log('Contract connection successful');
+      console.log(`Contract connection successful (version: ${this.contractVersion})`);
       
     } catch (error) {
       console.error('Contract connection failed:', error.message);
@@ -144,26 +199,45 @@ class VaultChain {
 
     try {
       const submitTs = Date.now();
-      console.log(`Storing vault hash for user ${userId} on Sepolia...`);
-      console.log(`Transaction details:`, {
-        userId: userId,
-        userIdLength: userId.length,
-        vaultHash: vaultHash,
-        vaultHashLength: vaultHash.length,
-        vaultHashPreview: vaultHash.slice(0, 20) + '...'
-      });
+      const network = await this.provider.getNetwork();
+      const networkName = network.chainId === 42161 || network.chainId === 421614 ? 'Arbitrum' : 'Sepolia';
+      
+      console.log(`Storing vault hash for user ${userId} on ${networkName}...`);
+      
+      // Convert to bytes32 if using L2 contract
+      let userIdParam, vaultHashParam;
+      if (this.contractVersion === 'l2') {
+        userIdParam = this.hashUserId(userId);
+        vaultHashParam = this.hexToBytes32(vaultHash);
+        console.log(`Transaction details (L2):`, {
+          userId,
+          userIdHash: userIdParam,
+          vaultHash: vaultHash,
+          vaultHashBytes32: vaultHashParam
+        });
+      } else {
+        userIdParam = userId;
+        vaultHashParam = vaultHash;
+        console.log(`Transaction details (Legacy):`, {
+          userId: userId,
+          userIdLength: userId.length,
+          vaultHash: vaultHash,
+          vaultHashLength: vaultHash.length
+        });
+      }
       
       let gasLimit;
       try {
-        const estimatedGas = await this.contract.estimateGas.updateVaultHash(userId, vaultHash);
+        const estimatedGas = await this.contract.estimateGas.updateVaultHash(userIdParam, vaultHashParam);
         gasLimit = estimatedGas.mul(120).div(100); // Add 20% buffer
         console.log(`Estimated gas: ${estimatedGas.toString()}, Using: ${gasLimit.toString()}`);
       } catch (error) {
         console.log(`Gas estimation failed, using default: ${error.message}`);
-        gasLimit = 300000; // Increased default gas limit
+        // L2 contracts use less gas, adjust default
+        gasLimit = this.contractVersion === 'l2' ? 100000 : 300000;
       }
       
-      const tx = await this.contract.updateVaultHash(userId, vaultHash, {
+      const tx = await this.contract.updateVaultHash(userIdParam, vaultHashParam, {
         gasLimit: gasLimit
       });
       
@@ -178,6 +252,8 @@ class VaultChain {
         const anchorEntry = {
           op: 'anchor',
           userId,
+          contractVersion: this.contractVersion,
+          network: networkName,
           txHash: tx.hash,
           submitTs,
           confirmTs,
@@ -208,23 +284,104 @@ class VaultChain {
     }
   }
 
+  /**
+   * Batch update multiple vault hashes in a single transaction (L2 only)
+   * @param {Array<{userId: string, vaultHash: string}>} updates - Array of userId/vaultHash pairs
+   * @returns {Promise<Object>} Transaction result
+   */
+  async batchStoreVaultHash(updates) {
+    if (!this.initialized) {
+      throw new Error('Ethereum service not initialized');
+    }
+
+    if (this.contractVersion !== 'l2') {
+      throw new Error('Batch updates only supported on L2-optimized contract');
+    }
+
+    try {
+      const submitTs = Date.now();
+      const network = await this.provider.getNetwork();
+      const networkName = network.chainId === 42161 || network.chainId === 421614 ? 'Arbitrum' : 'Sepolia';
+      
+      console.log(`Batch storing ${updates.length} vault hashes on ${networkName}...`);
+      
+      // Convert to bytes32 arrays
+      const userIdHashes = updates.map(u => this.hashUserId(u.userId));
+      const vaultHashes = updates.map(u => this.hexToBytes32(u.vaultHash));
+      
+      let gasLimit;
+      try {
+        const estimatedGas = await this.contract.estimateGas.batchUpdateVaultHash(userIdHashes, vaultHashes);
+        gasLimit = estimatedGas.mul(120).div(100);
+        console.log(`Estimated gas: ${estimatedGas.toString()}, Using: ${gasLimit.toString()}`);
+      } catch (error) {
+        console.log(`Gas estimation failed, using default: ${error.message}`);
+        // Base gas + per-item gas (rough estimate)
+        gasLimit = 50000 + (updates.length * 50000);
+      }
+      
+      const tx = await this.contract.batchUpdateVaultHash(userIdHashes, vaultHashes, {
+        gasLimit: gasLimit
+      });
+      
+      console.log(`Batch transaction sent: ${tx.hash}`);
+      
+      const receipt = await tx.wait();
+      const confirmTs = Date.now();
+      console.log(`Batch transaction confirmed in block ${receipt.blockNumber}`);
+
+      return {
+        success: true,
+        txHash: tx.hash,
+        blockNumber: receipt.blockNumber,
+        gasUsed: receipt.gasUsed.toString(),
+        itemsUpdated: updates.length
+      };
+      
+    } catch (error) {
+      console.error('Failed to batch store vault hashes:', error.message);
+      return {
+        success: false,
+        error: error.message
+      };
+    }
+  }
+
   async getVaultHash(userId) {
     if (!this.initialized) {
       throw new Error('Ethereum service not initialized');
     }
 
     try {
-      const [vaultHash, timestamp, exists] = await this.contract.getVaultHash(userId);
+      // Convert userId to bytes32 if using L2 contract
+      const userIdParam = this.contractVersion === 'l2' ? this.hashUserId(userId) : userId;
+      
+      const result = await this.contract.getVaultHash(userIdParam);
+      
+      // Handle different return types
+      let vaultHash, timestamp, exists;
+      if (Array.isArray(result)) {
+        [vaultHash, timestamp, exists] = result;
+      } else {
+        // Handle struct return
+        vaultHash = result.vaultHash;
+        timestamp = result.timestamp;
+        exists = result.exists;
+      }
       
       if (!exists) {
         return { exists: false };
       }
       
+      // Convert bytes32 back to hex string if needed
+      const vaultHashStr = typeof vaultHash === 'string' ? vaultHash : vaultHash;
+      const timestampNum = timestamp.toNumber ? timestamp.toNumber() : Number(timestamp);
+      
       return {
         exists: true,
-        vaultHash,
-        timestamp: timestamp.toNumber(),
-        blockTime: new Date(timestamp.toNumber() * 1000).toISOString()
+        vaultHash: vaultHashStr,
+        timestamp: timestampNum,
+        blockTime: new Date(timestampNum * 1000).toISOString()
       };
       
     } catch (error) {
