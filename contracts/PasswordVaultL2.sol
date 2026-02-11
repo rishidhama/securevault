@@ -1,18 +1,6 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
-/**
- * @title PasswordVaultL2
- * @notice L2-optimized contract for storing vault integrity hashes on Arbitrum
- * @dev Uses bytes32 instead of strings for 10-20x gas savings on L2
- * 
- * Gas Optimizations:
- * - bytes32 instead of string: ~90% storage cost reduction
- * - Packed struct: 2 storage slots instead of 4
- * - Custom errors: ~50% cheaper than require strings
- * - Removed redundant userId from struct (it's the mapping key)
- * - Optimized event indexing with bytes32
- */
 contract PasswordVaultL2 {
     // Custom errors (cheaper than require strings)
     error EmptyInput();
@@ -32,7 +20,6 @@ contract PasswordVaultL2 {
     // Mapping: userIdHash (bytes32) => VaultHash
     // userIdHash = keccak256(abi.encodePacked(userId))
     mapping(bytes32 => VaultHash) public vaults;
-    
     // Track unique users (for statistics)
     mapping(bytes32 => bool) private userSeen;
     uint256 private vaultCount;
@@ -68,7 +55,6 @@ contract PasswordVaultL2 {
     function updateVaultHash(bytes32 userIdHash, bytes32 vaultHash) external {
         if (vaultHash == bytes32(0)) revert EmptyInput();
 
-        // Track new users for statistics
         if (!vaults[userIdHash].exists && !userSeen[userIdHash]) {
             userSeen[userIdHash] = true;
             vaultCount += 1;

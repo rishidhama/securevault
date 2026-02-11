@@ -1,23 +1,8 @@
 /**
- * Batch Queue Service for Blockchain Updates
+ * Batch Queue Service
  * 
- * Hybrid batching for blockchain vault-hash anchoring.
- *
- * Goals:
- * - Reduce transaction spam by coalescing rapid updates (store only latest hash per user).
- * - Support hybrid flush policy: flush when there are 10-20 updates OR after 30 minutes.
- * - Time-based flush should only happen if there are pending changes.
- * - Work on both L1 (legacy contract) and L2 (Arbitrum bytes32 contract).
- *
- * Behavior:
- * - L2 (`CONTRACT_VERSION=l2`): uses on-chain batch method when flushing multiple users.
- * - L1/legacy: flushes individually, but still coalesces to latest hash per user.
- * 
- * Features:
- * - Hybrid trigger: >= minUpdates (default 10) OR >= maxUpdates (default 20) OR maxWaitMs (default 30min)
- * - Coalescing: repeated updates for the same user only keep the latest vaultHash
- * - Automatic fallback to individual updates if L2 batch fails
- * - Per-user queue management + stats
+ * Coalesces vault updates and flushes when there are 10-20 changes or after 30 minutes.
+ * Supports both L1 and L2 contracts.
  */
 
 const ethereumService = require('./ethereum-service');
@@ -41,9 +26,8 @@ class BatchQueue {
     // Configuration
     this.minUpdates = parseInt(process.env.BATCH_MIN_UPDATES || '10', 10);
     this.maxUpdates = parseInt(process.env.BATCH_MAX_UPDATES || '20', 10);
-    // Flush check tick (not the max wait). Keep relatively small; it won't flush if no pending changes.
-    this.checkIntervalMs = parseInt(process.env.BATCH_CHECK_INTERVAL || '30000', 10); // 30s
-    this.maxWaitMs = parseInt(process.env.BATCH_MAX_WAIT_MS || String(30 * 60 * 1000), 10); // 30 minutes
+    this.checkIntervalMs = parseInt(process.env.BATCH_CHECK_INTERVAL || '30000', 10);
+    this.maxWaitMs = parseInt(process.env.BATCH_MAX_WAIT_MS || String(30 * 60 * 1000), 10);
     this.maxRetries = parseInt(process.env.BATCH_MAX_RETRIES || '3', 10);
     
     // Periodic check timer
@@ -62,17 +46,6 @@ class BatchQueue {
     this.startCheckTimer();
   }
 
-  _now() {
-    return Date.now();
-  }
-
-  _contractVersion() {
-    return process.env.CONTRACT_VERSION || 'legacy';
-  }
-
-  _isBatchEnabled() {
-    return process.env.BATCH_ENABLED === 'true';
-  }
 
   /**
    * Add a vault hash update to the queue
@@ -86,12 +59,11 @@ class BatchQueue {
       return { success: true, queued: false, reason: 'blockchain_disabled' };
     }
 
-    // If batching is disabled, flush immediately (works for both L1 and L2)
-    if (!this._isBatchEnabled()) {
+    if (process.env.BATCH_ENABLED !== 'true') {
       return this.flushImmediate(userId, vaultHash);
     }
 
-    const now = this._now();
+    const now = Date.now();
     const existing = this.pending.get(userId);
     const prevHash = existing ? existing.latestVaultHash : null;
     const changed = prevHash !== vaultHash;
@@ -141,13 +113,12 @@ class BatchQueue {
    */
   _isDue(s, now) {
     if (!s || !s.latestVaultHash) return false;
-    if (!s.pendingCount || s.pendingCount <= 0) return false; // only flush if there were changes
-    if (s.pendingCount >= this.maxUpdates) return true;
+    if (!s.pendingCount || s.pendingCount <= 0) return false;//only flush if there were changes
     const age = s.firstPendingAt ? (now - s.firstPendingAt) : 0;
-    if (age >= this.maxWaitMs) return true;
-    // For size-based hybrid: allow flush at minUpdates during periodic checks
-    if (s.pendingCount >= this.minUpdates) return true;
-    return false;
+    if (age >= this.maxWaitMs) return true;//flush if it's been too long
+    //for size-based hybrid : allow flush at minUpdates 
+    if (s.pendingCount >= this.minUpdates) return true;//flush if there are too many changes
+    return false;//otherwise, don't flush
   }
 
   /**
@@ -158,8 +129,8 @@ class BatchQueue {
    * @param {{forceUserId?: string}} opts
    */
   async flushDueUsers(opts = {}) {
-    const now = this._now();
-    const contractVersion = this._contractVersion();
+    const now = Date.now();
+    const contractVersion = process.env.CONTRACT_VERSION || 'legacy';
 
     // Build list of due user states
     const dueStates = [];

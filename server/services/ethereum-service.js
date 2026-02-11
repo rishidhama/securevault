@@ -1,20 +1,10 @@
 const { ethers } = require('ethers');
 
 /**
- *  Blockchain Integrity Service (L2-Optimized)
+ * Blockchain Integrity Service
  * 
- * Provides tamper-evident storage of vault integrity hashes on Ethereum L1/L2.
- * Supports both legacy string-based contracts and L2-optimized bytes32 contracts.
- * 
- * L2 Optimizations (Arbitrum):
- * - Uses bytes32 instead of strings: ~90% gas savings
- * - Packed structs: 2 storage slots vs 4
- * - Custom errors: ~50% cheaper than require strings
- * - Batch updates: Multiple vaults in single transaction
- * 
- * Architecture decision: Only store Merkle roots of audit events, never
- * plaintext credentials or encrypted data. This provides tamper detection
- * while maintaining privacy.
+ * Stores vault integrity hashes on Ethereum L1/L2.
+ * Supports both legacy string-based contracts and L2 bytes32 contracts.
  */
 class VaultChain {
   constructor() {
@@ -31,29 +21,15 @@ class VaultChain {
     this.initialized = false;
   }
 
-  /**
-   * Convert userId (string) to bytes32 hash
-   * @param {string} userId - User identifier (email, MongoDB ID, etc.)
-   * @returns {string} bytes32 hex string
-   */
   hashUserId(userId) {
     return ethers.utils.keccak256(ethers.utils.toUtf8Bytes(userId));
   }
 
-  /**
-   * Convert hex string vaultHash to bytes32
-   * @param {string} vaultHash - Hex string (e.g., "0xabc123...")
-   * @returns {string} bytes32 hex string
-   */
   hexToBytes32(vaultHash) {
-    // Remove '0x' prefix if present
     const cleanHash = vaultHash.startsWith('0x') ? vaultHash.slice(2) : vaultHash;
-    
-    // Ensure it's 64 hex characters (32 bytes)
     if (cleanHash.length !== 64) {
       throw new Error(`Invalid hash length: expected 64 hex chars, got ${cleanHash.length}`);
     }
-    
     return '0x' + cleanHash;
   }
 
@@ -420,7 +396,6 @@ class VaultChain {
       console.log(`Transaction history requested for user: ${userId}`);
       console.log('Event querying requires external indexing service');
       
-      // Note: Event querying requires external indexing service
       // For production, implement with The Graph Protocol or similar
       // Current implementation stores events in database for querying
       

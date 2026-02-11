@@ -188,8 +188,6 @@ function App() {
         setTimeout(() => reject(new Error('Data loading timeout')), 10000)
       );
       
-      // Performance: Load all credentials for initial display (backward compatible)
-      // Using getAll=true to bypass pagination for initial load
       const dataPromise = Promise.all([
         credentialsAPI.listAll(), // Get all credentials for initial load
         credentialsAPI.stats(),
@@ -242,7 +240,6 @@ function App() {
           const userIdentifier = authData.user.email || authData.user.id;
           const userSalt = encryptionService.getOrGenerateUserSalt(userIdentifier);
           await encryptionService.initializeSessionVaultKey(masterKey, userSalt);
-          console.log('Session vault key initialized - PBKDF2 will only run once per login');
         } catch (error) {
           console.warn('Failed to initialize session vault key, will use legacy format:', error);
         }
@@ -351,7 +348,6 @@ function App() {
         const updated = [newCredentialData, ...credentials];
         const root = await computeMerkleRoot(updated);
             if (root) {
-              // Fire and forget - don't block the response
               blockchainAPI.storeVault(user.id, { merkleRoot: root }).catch(err => {
                 console.log('Anchoring failed (non-blocking):', err?.message || err);
               });
@@ -422,7 +418,6 @@ function App() {
         return updatedList;
       });
 
-      // Performance: Make blockchain anchoring async/non-blocking
       if (user?.id) {
         (async () => {
       try {

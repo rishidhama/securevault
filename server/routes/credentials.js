@@ -203,8 +203,6 @@ router.get('/', authenticateToken, async (req, res) => {
     const sortOptions = {};
     sortOptions[sortBy] = sortOrder === 'desc' ? -1 : 1;
     
-    // Performance: Pagination support - default limit 200 for better performance
-    // Set getAll=true to get all credentials (backward compatibility)
     const shouldPaginate = getAll !== 'true';
     const pageNum = parseInt(page, 10) || 1;
     const limitNum = shouldPaginate ? (parseInt(limit, 10) || 100) : null;
