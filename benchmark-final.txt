@@ -1,0 +1,26 @@
+PS D:\SecureVault> node analyze-bench.js securevault-bench-client.json server.log
+=== Client-side crypto ===
+PBKDF2 (310k iters) ms: median = 37.40 p95 = 50.50
+
+AES-256-GCM per-credential timings:
+Encrypt password ms: median = 37.00 p95 = 46.10
+Decrypt password ms: median = 37.00 p95 = 45.80
+
+Merkle computation ms by N (median / p95):
+10 0.40 / 0.60
+50 1.30 / 1.60
+100 2.30 / 3.00
+250 5.40 / 6.20
+500 10.65 / 11.30
+1000 21.10 / 22.10
+2500 58.80 / 67.10
+5000 207.15 / 285.70
+
+=== Backend API ===
+GET /api/credentials ms: median = 318.17 p95 = 1596.76
+POST /api/credentials ms: median = 97.84 p95 = 171.30
+
+=== Blockchain anchoring ===
+Anchoring latency ms: median = 10848.00 p95 = 15332.00
+Average gas used = 52505
+PS D:\SecureVault> 
