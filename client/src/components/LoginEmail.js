@@ -14,8 +14,6 @@ const LoginEmail = () => {
       setError('Please enter a valid email address');
       return;
     }
-    // In a real app, we would verify the email/account exists.
-    // For now, proceed to master key step with email in state via navigation.
     navigate('/login/master-key', { state: { email } });
   };
 

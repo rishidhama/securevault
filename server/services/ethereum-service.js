@@ -143,6 +143,7 @@ class VaultChain {
     }
 
     try {
+      const submitTs = Date.now();
       console.log(`Storing vault hash for user ${userId} on Sepolia...`);
       console.log(`Transaction details:`, {
         userId: userId,
@@ -169,7 +170,27 @@ class VaultChain {
       console.log(`Transaction sent: ${tx.hash}`);
       
       const receipt = await tx.wait();
+      const confirmTs = Date.now();
       console.log(`Transaction confirmed in block ${receipt.blockNumber}`);
+
+      // Structured log for benchmarking anchoring latency and gas usage
+      try {
+        const anchorEntry = {
+          op: 'anchor',
+          userId,
+          txHash: tx.hash,
+          submitTs,
+          confirmTs,
+          latencyMs: confirmTs - submitTs,
+          blockNumber: receipt.blockNumber,
+          gasUsed: receipt.gasUsed ? receipt.gasUsed.toString() : null,
+          gasPriceWei: receipt.effectiveGasPrice ? receipt.effectiveGasPrice.toString() : null
+        };
+        // eslint-disable-next-line no-console
+        console.log(JSON.stringify(anchorEntry));
+      } catch (e) {
+        // ignore logging errors
+      }
       
       return {
         success: true,

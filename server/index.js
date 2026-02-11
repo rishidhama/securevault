@@ -34,6 +34,32 @@ app.use(helmet({
   referrerPolicy: { policy: 'strict-origin-when-cross-origin' }
 }));
 
+// Lightweight performance logging middleware (API benchmarking)
+app.use((req, res, next) => {
+  const start = process.hrtime.bigint();
+  res.on('finish', () => {
+    try {
+      const end = process.hrtime.bigint();
+      const durationMs = Number(end - start) / 1e6;
+      const entry = {
+        op: 'api',
+        method: req.method,
+        path: req.path,
+        originalUrl: req.originalUrl,
+        status: res.statusCode,
+        timeMs: durationMs,
+        ts: Date.now()
+      };
+      // Emit as single-line JSON for easy post-processing
+      // eslint-disable-next-line no-console
+      console.log(JSON.stringify(entry));
+    } catch (e) {
+      // Swallow logging errors to avoid impacting API behaviour
+    }
+  });
+  next();
+});
+
 const corsOptions = {
   origin: [
     process.env.CLIENT_URL || 'http://localhost:3000',
@@ -52,7 +78,8 @@ app.options('*', cors(corsOptions));
 const limiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   max: process.env.NODE_ENV === 'development' ? 1000 : 100,
-  message: 'Too many requests from this IP, please try again later.'
+  message: 'Too many requests from this IP, please try again later.',
+  skip: () => process.env.BENCHMARK_MODE === 'true'
 });
 if (process.env.NODE_ENV !== 'development') {
   app.use('/api/', limiter);
