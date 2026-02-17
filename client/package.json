@@ -3,10 +3,10 @@
   "version": "1.0.0",
   "private": true,
   "dependencies": {
+    "@noble/hashes": "^2.0.1",
     "@testing-library/jest-dom": "^5.16.4",
     "@testing-library/react": "^13.3.0",
     "@testing-library/user-event": "^13.5.0",
-    "argon2-browser": "^1.18.0",
     "axios": "^1.4.0",
     "clsx": "^1.2.1",
     "crypto-js": "^4.1.1",

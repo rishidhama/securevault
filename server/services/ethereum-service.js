@@ -52,6 +52,7 @@ class VaultChain {
       this.wallet = new ethers.Wallet(this.privateKey, this.provider);
       
       const network = await this.provider.getNetwork();
+      // Refresh balance to ensure accurate reading
       const balance = await this.wallet.getBalance();
       
       // Detect network type

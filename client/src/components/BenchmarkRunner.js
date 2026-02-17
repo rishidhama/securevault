@@ -3,7 +3,7 @@ import vaultCrypt from '../utils/encryption';
 import { computeMerkleRoot } from '../utils/merkle';
 import IncrementalMerkleTree from '../utils/incremental-merkle';
 import { credentialsAPI } from '../services/api';
-import * as argon2 from 'argon2-browser';
+import { argon2id } from '@noble/hashes/argon2';
 
 const BenchmarkRunner = ({ masterKey }) => {
   const [logs, setLogs] = useState([]);
@@ -50,10 +50,11 @@ const BenchmarkRunner = ({ masterKey }) => {
     });
   };
 
-  const runArgon2id = async (config) => {
+  const runArgon2id = (config, isWarmup = false) => {
     if (!masterKey) {
       throw new Error('Master key required for Argon2id benchmark');
     }
+    
     const saltBase64 = vaultCrypt.generateSalt();
     const binary = atob(saltBase64);
     const saltBytes = new Uint8Array(binary.length);
@@ -63,20 +64,19 @@ const BenchmarkRunner = ({ masterKey }) => {
 
     const { time = 2, mem = 64 * 1024, parallelism = 1 } = config || {};
 
+    const passwordBytes = new TextEncoder().encode(masterKey);
+
     const t0 = performance.now();
-    await argon2.hash({
-      pass: masterKey,
-      salt: saltBytes,
-      time,
-      mem,
-      parallelism,
-      hashLen: 32,
-      type: argon2.ArgonType.Argon2id,
+    const hash = argon2id(passwordBytes, saltBytes, {
+      t: time,
+      m: mem,
+      p: parallelism,
+      dkLen: 32,
     });
     const t1 = performance.now();
 
     log({
-      op: 'argon2id',
+      op: isWarmup ? 'argon2id-warmup' : 'argon2id',
       timeMs: t1 - t0,
       params: { time, mem, parallelism },
     });
@@ -240,6 +240,14 @@ const BenchmarkRunner = ({ masterKey }) => {
       for (let i = 0; i < 3; i += 1) {
         // eslint-disable-next-line no-await-in-loop
         await runPBKDF2(310000, true);
+        if (includeArgon2) {
+          try {
+            // eslint-disable-next-line no-await-in-loop
+            await runArgon2id({ time: 2, mem: 32 * 1024, parallelism: 1 }, true);
+          } catch (e) {
+            // Skip if Argon2 fails
+          }
+        }
         // eslint-disable-next-line no-await-in-loop
         await runEncryptDecrypt(true);
         // eslint-disable-next-line no-await-in-loop
@@ -260,8 +268,17 @@ const BenchmarkRunner = ({ masterKey }) => {
             if (includeArgon2) {
               // eslint-disable-next-line no-await-in-loop
               for (const cfg of argon2Configs) {
-                // eslint-disable-next-line no-await-in-loop
-                await runArgon2id(cfg);
+                try {
+                  // eslint-disable-next-line no-await-in-loop
+                  await runArgon2id(cfg, false);
+                } catch (error) {
+                  // Log error but continue with other benchmarks
+                  log({
+                    op: 'argon2id-error',
+                    error: error.message,
+                    params: cfg,
+                  });
+                }
               }
             }
             // eslint-disable-next-line no-await-in-loop
