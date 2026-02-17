@@ -42,19 +42,19 @@ async function deployL2Contract() {
     console.log(`Balance: ${ethers.utils.formatEther(balance)} ETH`);
 
     if (balance.lt(ethers.utils.parseEther('0.01'))) {
-      console.warn('\n⚠️  Warning: Low balance. You may need more ETH for deployment.');
+      console.warn('\n  Warning: Low balance. You may need more ETH for deployment.');
     }
 
     // Read contract source
     const contractPath = path.join(__dirname, '../contracts/PasswordVaultL2.sol');
     const contractSource = fs.readFileSync(contractPath, 'utf8');
 
-    console.log('\n📄 Contract source loaded');
+    console.log('\n Contract source loaded');
     console.log(`   Size: ${contractSource.length} bytes`);
 
     // For production, you'd compile with Hardhat/Foundry
     // This is a simplified example - in practice, use compiled bytecode
-    console.log('\n⚠️  Note: This script requires compiled bytecode.');
+    console.log('\n  Note: This script requires compiled bytecode.');
     console.log('   For production deployment, use:');
     console.log('   - Hardhat: npx hardhat run scripts/deploy-l2.js --network arbitrumSepolia');
     console.log('   - Foundry: forge script scripts/DeployL2.s.sol --rpc-url $ARBITRUM_RPC_URL');
@@ -74,12 +74,12 @@ async function deployL2Contract() {
       'event VaultDeleted(bytes32 indexed,uint64)'
     ];
 
-    console.log('\n📋 Contract ABI:');
+    console.log('\n Contract ABI:');
     contractABI.forEach((item, i) => {
       console.log(`   ${i + 1}. ${item}`);
     });
 
-    console.log('\n✅ Deployment script ready');
+    console.log('\n Deployment script ready');
     console.log('\nNext steps:');
     console.log('1. Compile contract: npx hardhat compile');
     console.log('2. Deploy: npx hardhat run scripts/deploy-l2.js --network arbitrumSepolia');
@@ -87,7 +87,7 @@ async function deployL2Contract() {
     console.log('4. Set CONTRACT_VERSION=l2 in .env');
 
   } catch (error) {
-    console.error('\n❌ Deployment failed:', error.message);
+    console.error('\n Deployment failed:', error.message);
     console.error(error.stack);
     process.exit(1);
   }
@@ -97,14 +97,16 @@ async function deployL2Contract() {
 if (require.main === module) {
   deployL2Contract()
     .then(() => {
-      console.log('\n✅ Script completed');
+      console.log('\n Script completed');
       process.exit(0);
     })
     .catch((error) => {
-      console.error('\n❌ Script failed:', error);
+      console.error('\n Script failed:', error);
       process.exit(1);
     });
 }
 
 module.exports = { deployL2Contract };
+
+
 
