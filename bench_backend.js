@@ -5,6 +5,7 @@
 
 
 const fetch = require('node-fetch');
+const crypto = require('crypto');
 
 const BASE_URL = process.env.BENCH_BASE_URL || 'http://localhost:5000';
 const DEFAULT_MASTER = 'BenchmarkMasterKey123!';
@@ -26,12 +27,19 @@ const EMAILS = (process.env.BENCH_EMAILS || '').trim()
 const READ_REQUESTS = parseInt(process.env.BENCH_READS || '50', 10);
 const WRITE_REQUESTS = parseInt(process.env.BENCH_WRITES || '10', 10);
 
+function deriveAuthSecret(email, masterKey) {
+  const normalizedEmail = String(email || '').trim().toLowerCase();
+  const input = `auth:${normalizedEmail}:${masterKey}`;
+  return crypto.createHash('sha256').update(input).digest('hex');
+}
+
 async function login(email, masterKey) {
   console.log(`Logging in as ${email}...`);
+  const authSecret = deriveAuthSecret(email, masterKey);
   const res = await fetch(`${BASE_URL}/api/auth/login`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ email, masterKey })
+    body: JSON.stringify({ email, authSecret })
   });
 
   if (!res.ok) {

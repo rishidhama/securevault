@@ -33,6 +33,7 @@ import BlockchainMonitor from './BlockchainMonitor';
 import BlockchainActivityLog from './BlockchainActivityLog';
 import { authAPI, mfaAPI, billingAPI, importExportAPI } from '../services/api';
 import encryptionService from '../utils/encryption';
+import { deriveAuthSecret } from '../utils/authSecret';
 
 const SettingsPage = ({ user, masterKey, onLogout, credentials, decryptPassword }) => {
   console.log('SettingsPage rendered with props:', {
@@ -488,8 +489,17 @@ const SettingsPage = ({ user, masterKey, onLogout, credentials, decryptPassword 
 
     try {
       setIsLoading(true);
-      
-      const response = await authAPI.changeMasterKey(currentMasterKey, newMasterKey);
+
+      if (!user?.email) {
+        toast.error('Email is required to change master key');
+        setIsLoading(false);
+        return;
+      }
+
+      const currentAuthSecret = deriveAuthSecret(user.email, currentMasterKey);
+      const newAuthSecret = deriveAuthSecret(user.email, newMasterKey);
+
+      const response = await authAPI.changeMasterKey(currentAuthSecret, newAuthSecret);
 
       if (response.success) {
         toast.success('Master key changed successfully');

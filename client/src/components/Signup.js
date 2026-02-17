@@ -3,6 +3,7 @@ import { useNavigate, Link } from 'react-router-dom';
 import { Mail, User, KeyRound, Eye, EyeOff, Shield, ArrowRight, AlertCircle } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { authAPI } from '../services/api';
+import { deriveAuthSecret } from '../utils/authSecret';
 
 const Signup = ({ onSignupSuccess }) => {
   const [email, setEmail] = useState('');
@@ -40,10 +41,13 @@ const Signup = ({ onSignupSuccess }) => {
         throw new Error('Master key and confirmation do not match');
       }
 
+      const trimmedEmail = email.trim();
+      const authSecret = deriveAuthSecret(trimmedEmail, masterKey);
+
       const response = await authAPI.register({
-        email: email.trim(),
+        email: trimmedEmail,
         name: name.trim(),
-        masterKey
+        authSecret
       });
 
       if (response.success) {
@@ -51,11 +55,16 @@ const Signup = ({ onSignupSuccess }) => {
         
         localStorage.setItem('securevault_token', data.token);
         localStorage.setItem('securevault_user', JSON.stringify(data.user));
+        // Store master key only locally for client-side encryption
+        sessionStorage.setItem('securevault_master_key', masterKey);
         
         toast.success('Account created successfully!');
         
         if (onSignupSuccess) {
-          onSignupSuccess(data);
+          onSignupSuccess({
+            ...data,
+            masterKey
+          });
         }
         
         navigate('/');

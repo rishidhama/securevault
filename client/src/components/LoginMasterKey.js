@@ -4,6 +4,7 @@ import { Eye, EyeOff, Shield, ArrowLeft, CheckCircle, AlertCircle, Fingerprint }
 import toast from 'react-hot-toast';
 import { authAPI } from '../services/api';
 import { base64urlToArrayBuffer, arrayBufferToBase64url } from '../utils/webauthn';
+import { deriveAuthSecret } from '../utils/authSecret';
 
 const LoginMasterKey = ({ onLoginSuccess }) => {
   const location = useLocation();
@@ -312,9 +313,11 @@ const LoginMasterKey = ({ onLoginSuccess }) => {
         throw new Error('Email is required. Please go back and enter your email.');
       }
 
+      const authSecret = deriveAuthSecret(emailFromState, masterKey);
+
       const data = await authAPI.login({
         email: emailFromState,
-        masterKey
+        authSecret
       });
 
       // Check if MFA is required
@@ -446,7 +449,9 @@ const LoginMasterKey = ({ onLoginSuccess }) => {
                     </div>
                   </div>
                 )}
-                <p className="text-xs text-secondary-500 mt-2">Your master key never leaves your device and is never sent to our servers.</p>
+                <p className="text-xs text-secondary-500 mt-2">
+                  Your master key is used only on this device; the server sees only a one-way derived login secret.
+                </p>
               </div>
               
               <button 

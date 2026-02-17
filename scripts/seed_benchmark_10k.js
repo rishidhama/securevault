@@ -9,12 +9,19 @@
 //   BENCH_MASTER_KEY - master key for benchmark user (default: BenchmarkMasterKey123!)
 
 const fetch = require('node-fetch');
+const crypto = require('crypto');
 
 const BASE_URL = process.env.BENCH_BASE_URL || 'http://localhost:5000';
 const DEFAULT_MASTER = 'BenchmarkMasterKey123!';
 const MASTER_KEY = process.env.BENCH_MASTER_KEY || DEFAULT_MASTER;
 const EMAIL = process.env.BENCH_EMAIL || 'benchmark10000@example.com';
 const TARGET_COUNT = parseInt(process.env.BENCH_TARGET_COUNT || '10000', 10);
+
+function deriveAuthSecret(email, masterKey) {
+  const normalizedEmail = String(email || '').trim().toLowerCase();
+  const input = `auth:${normalizedEmail}:${masterKey}`;
+  return crypto.createHash('sha256').update(input).digest('hex');
+}
 
 function randomString(len) {
   const chars = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
@@ -28,10 +35,11 @@ function randomString(len) {
 async function registerIfNeeded() {
   // Try a login first; if it fails with 4xx, attempt registration.
   try {
+    const authSecret = deriveAuthSecret(EMAIL, MASTER_KEY);
     const res = await fetch(`${BASE_URL}/api/auth/login`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email: EMAIL, masterKey: MASTER_KEY })
+      body: JSON.stringify({ email: EMAIL, authSecret })
     });
     if (res.ok) {
       const json = await res.json();
@@ -49,7 +57,7 @@ async function registerIfNeeded() {
     body: JSON.stringify({
       email: EMAIL,
       name: 'Benchmark 10k User',
-      masterKey: MASTER_KEY
+      authSecret: deriveAuthSecret(EMAIL, MASTER_KEY)
     })
   });
   if (!regRes.ok) {
@@ -62,10 +70,11 @@ async function registerIfNeeded() {
 }
 
 async function login() {
+  const authSecret = deriveAuthSecret(EMAIL, MASTER_KEY);
   const res = await fetch(`${BASE_URL}/api/auth/login`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ email: EMAIL, masterKey: MASTER_KEY })
+    body: JSON.stringify({ email: EMAIL, authSecret })
   });
   if (!res.ok) {
     const text = await res.text();

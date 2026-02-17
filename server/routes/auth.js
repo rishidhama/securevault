@@ -31,11 +31,11 @@ const validateRegistration = [
     .trim()
     .isLength({ min: 2, max: 100 })
     .withMessage('Name must be between 2 and 100 characters'),
-  body('masterKey')
+  body('authSecret')
     .notEmpty()
-    .withMessage('Master key is required')
-    .isLength({ min: 12 })
-    .withMessage('Master key must be at least 12 characters long')
+    .withMessage('Authentication secret is required')
+    .isLength({ min: 32 })
+    .withMessage('Authentication secret is too short')
 ];
 
 const validateLogin = [
@@ -45,9 +45,9 @@ const validateLogin = [
     .isEmail()
     .normalizeEmail()
     .withMessage('Please enter a valid email address'),
-  body('masterKey')
+  body('authSecret')
     .notEmpty()
-    .withMessage('Master key is required')
+    .withMessage('Authentication secret is required')
 ];
 
 const generateToken = (userId) => {
@@ -85,7 +85,7 @@ router.post('/register', validateRegistration, async (req, res) => {
       });
     }
 
-    const { email, name, masterKey } = req.body;
+    const { email, name, authSecret } = req.body;
 
     const existingUser = await User.findByEmail(email);
     if (existingUser) {
@@ -98,7 +98,7 @@ router.post('/register', validateRegistration, async (req, res) => {
     const user = new User({
       email,
       name,
-      masterKeyHash: masterKey
+      masterKeyHash: authSecret
     });
 
     await user.save();
@@ -141,7 +141,7 @@ router.post('/login', validateLogin, async (req, res) => {
       });
     }
 
-    const { email, masterKey } = req.body;
+    const { email, authSecret } = req.body;
 
     try {
       const user = await User.findByEmail(email);
@@ -160,7 +160,7 @@ router.post('/login', validateLogin, async (req, res) => {
         });
       }
 
-      const isValidKey = await user.validateMasterKey(masterKey).catch(() => false);
+      const isValidKey = await user.validateMasterKey(authSecret).catch(() => false);
       if (!isValidKey) {
         await user.incLoginAttempts();
         return res.status(401).json({
@@ -642,19 +642,19 @@ router.put('/profile', authenticateToken, async (req, res) => {
 
 router.post('/change-master-key', authenticateToken, async (req, res) => {
   try {
-    const { currentMasterKey, newMasterKey } = req.body;
+    const { currentAuthSecret, newAuthSecret } = req.body;
     
-    if (!currentMasterKey || !newMasterKey) {
+    if (!currentAuthSecret || !newAuthSecret) {
       return res.status(400).json({
         success: false,
-        error: 'Both current and new master keys are required'
+        error: 'Both current and new authentication secrets are required'
       });
     }
 
-    if (newMasterKey.length < 12) {
+    if (newAuthSecret.length < 32) {
       return res.status(400).json({
         success: false,
-        error: 'New master key must be at least 12 characters long'
+        error: 'New authentication secret is too short'
       });
     }
 
@@ -687,7 +687,7 @@ router.post('/change-master-key', authenticateToken, async (req, res) => {
       });
     }
 
-    const isValidKey = await user.validateMasterKey(currentMasterKey);
+    const isValidKey = await user.validateMasterKey(currentAuthSecret);
     if (!isValidKey) {
       return res.status(401).json({
         success: false,
@@ -695,7 +695,7 @@ router.post('/change-master-key', authenticateToken, async (req, res) => {
       });
     }
 
-    user.masterKeyHash = newMasterKey;
+    user.masterKeyHash = newAuthSecret;
     await user.save();
 
     res.json({
