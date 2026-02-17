@@ -3,10 +3,12 @@ import vaultCrypt from '../utils/encryption';
 import { computeMerkleRoot } from '../utils/merkle';
 import IncrementalMerkleTree from '../utils/incremental-merkle';
 import { credentialsAPI } from '../services/api';
+import * as argon2 from 'argon2-browser';
 
 const BenchmarkRunner = ({ masterKey }) => {
   const [logs, setLogs] = useState([]);
   const [running, setRunning] = useState(false);
+  const [includeArgon2, setIncludeArgon2] = useState(false);
 
   const log = (entry) => {
     setLogs((prev) => [...prev, { ...entry, ts: Date.now() }]);
@@ -24,6 +26,38 @@ const BenchmarkRunner = ({ masterKey }) => {
       op: 'pbkdf2',
       timeMs: t1 - t0,
       iterations: iterations || vaultCrypt.iterations,
+    });
+  };
+
+  const runArgon2id = async (config) => {
+    if (!masterKey) {
+      throw new Error('Master key required for Argon2id benchmark');
+    }
+    const saltBase64 = vaultCrypt.generateSalt();
+    const binary = atob(saltBase64);
+    const saltBytes = new Uint8Array(binary.length);
+    for (let i = 0; i < binary.length; i += 1) {
+      saltBytes[i] = binary.charCodeAt(i);
+    }
+
+    const { time = 2, mem = 64 * 1024, parallelism = 1 } = config || {};
+
+    const t0 = performance.now();
+    await argon2.hash({
+      pass: masterKey,
+      salt: saltBytes,
+      time,
+      mem,
+      parallelism,
+      hashLen: 32,
+      type: argon2.ArgonType.Argon2id,
+    });
+    const t1 = performance.now();
+
+    log({
+      op: 'argon2id',
+      timeMs: t1 - t0,
+      params: { time, mem, parallelism },
     });
   };
 
@@ -139,6 +173,10 @@ const BenchmarkRunner = ({ masterKey }) => {
     try {
       // PBKDF2 iteration set for primary benchmark (100k / 310k / 600k)
       const iterationSets = [100000, 310000, 600000];
+      const argon2Configs = [
+        { time: 2, mem: 32 * 1024, parallelism: 1 },
+        { time: 3, mem: 64 * 1024, parallelism: 1 },
+      ];
 
       // Warm-ups
       for (let i = 0; i < 3; i += 1) {
@@ -157,6 +195,13 @@ const BenchmarkRunner = ({ masterKey }) => {
           for (let i = 0; i < 10; i += 1) {
             // eslint-disable-next-line no-await-in-loop
             await runPBKDF2(iters);
+            if (includeArgon2) {
+              // eslint-disable-next-line no-await-in-loop
+              for (const cfg of argon2Configs) {
+                // eslint-disable-next-line no-await-in-loop
+                await runArgon2id(cfg);
+              }
+            }
             // eslint-disable-next-line no-await-in-loop
             await runEncryptDecrypt();
             // eslint-disable-next-line no-await-in-loop
@@ -198,6 +243,14 @@ const BenchmarkRunner = ({ masterKey }) => {
         >
           Download Logs
         </button>
+        <label className="flex items-center gap-2 text-xs text-gray-700">
+          <input
+            type="checkbox"
+            checked={includeArgon2}
+            onChange={(e) => setIncludeArgon2(e.target.checked)}
+          />
+          Include Argon2id KDF benchmarks (slower)
+        </label>
       </div>
       <div className="text-xs text-gray-700 border rounded p-2 bg-gray-50 max-h-64 overflow-auto">
         <pre className="whitespace-pre-wrap">

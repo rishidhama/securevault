@@ -49,6 +49,33 @@ function analyzeClient(clientPath) {
     console.log('No PBKDF2 entries found in client benchmark JSON.');
   }
 
+  const argonByConfig = {};
+  data
+    .filter((d) => d.op === 'argon2id' && typeof d.timeMs === 'number' && d.params)
+    .forEach((d) => {
+      const { time, mem, parallelism } = d.params;
+      const key = `t${time || 0}-m${mem || 0}-p${parallelism || 1}`;
+      if (!argonByConfig[key]) argonByConfig[key] = [];
+      argonByConfig[key].push(d.timeMs);
+    });
+
+  if (Object.keys(argonByConfig).length) {
+    console.log('\nArgon2id timings by (time, mem, parallelism) (median / p95 in ms):');
+    Object.keys(argonByConfig)
+      .sort()
+      .forEach((key) => {
+        const arr = argonByConfig[key];
+        console.log(
+          `  ${key}:`,
+          median(arr).toFixed(2),
+          '/',
+          p95(arr).toFixed(2),
+        );
+      });
+  } else {
+    console.log('\nNo Argon2id entries found in client benchmark JSON.');
+  }
+
   const encTimes = data.filter((d) => d.op === 'encrypt').map((d) => d.timeMs);
   const decTimes = data.filter((d) => d.op === 'decrypt').map((d) => d.timeMs);
   if (encTimes.length || decTimes.length) {
