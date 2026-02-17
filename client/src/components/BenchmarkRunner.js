@@ -14,7 +14,28 @@ const BenchmarkRunner = ({ masterKey }) => {
     setLogs((prev) => [...prev, { ...entry, ts: Date.now() }]);
   };
 
-  const runPBKDF2 = async (iterations) => {
+  const logEnv = () => {
+    try {
+      const nav = typeof navigator !== 'undefined' ? navigator : {};
+      const win = typeof window !== 'undefined' ? window : {};
+      log({
+        op: 'env',
+        userAgent: nav.userAgent || '',
+        language: nav.language || '',
+        hardwareConcurrency: nav.hardwareConcurrency || null,
+        deviceMemory: nav.deviceMemory || null,
+        screen: {
+          width: win.innerWidth || null,
+          height: win.innerHeight || null,
+        },
+        timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || '',
+      });
+    } catch {
+      // Best-effort only
+    }
+  };
+
+  const runPBKDF2 = async (iterations, isWarmup = false) => {
     if (!masterKey) {
       throw new Error('Master key required for PBKDF2 benchmark');
     }
@@ -23,7 +44,7 @@ const BenchmarkRunner = ({ masterKey }) => {
     await vaultCrypt.deriveKey(masterKey, salt, iterations);
     const t1 = performance.now();
     log({
-      op: 'pbkdf2',
+      op: isWarmup ? 'pbkdf2-warmup' : 'pbkdf2',
       timeMs: t1 - t0,
       iterations: iterations || vaultCrypt.iterations,
     });
@@ -61,7 +82,7 @@ const BenchmarkRunner = ({ masterKey }) => {
     });
   };
 
-  const runEncryptDecrypt = async () => {
+  const runEncryptDecrypt = async (isWarmup = false) => {
     if (!masterKey) {
       throw new Error('Master key required for AES-GCM benchmark');
     }
@@ -80,7 +101,7 @@ const BenchmarkRunner = ({ masterKey }) => {
     const enc = await vaultCrypt.encryptPassword(password, masterKey);
     const tEnc1 = performance.now();
     log({
-      op: 'encrypt',
+      op: isWarmup ? 'encrypt-warmup' : 'encrypt',
       timeMs: tEnc1 - tEnc0,
     });
     // Decrypt
@@ -93,7 +114,7 @@ const BenchmarkRunner = ({ masterKey }) => {
     );
     const tDec1 = performance.now();
     log({
-      op: 'decrypt',
+      op: isWarmup ? 'decrypt-warmup' : 'decrypt',
       timeMs: tDec1 - tDec0,
     });
     if (plain !== password) {
@@ -101,7 +122,7 @@ const BenchmarkRunner = ({ masterKey }) => {
     }
   };
 
-  const runMerkle = async (N) => {
+  const runMerkle = async (N, isWarmup = false) => {
     const tFetch0 = performance.now();
     const res = await credentialsAPI.listAll();
     const allCreds = res.data || res || [];
@@ -113,7 +134,7 @@ const BenchmarkRunner = ({ masterKey }) => {
     const tMerkle1 = performance.now();
 
     log({
-      op: 'merkle',
+      op: isWarmup ? 'merkle-warmup' : 'merkle',
       N,
       fetchMs: tFetch1 - tFetch0,
       merkleMs: tMerkle1 - tMerkle0,
@@ -121,7 +142,7 @@ const BenchmarkRunner = ({ masterKey }) => {
     });
   };
 
-  const runIncrementalMerkle = async (N) => {
+  const runIncrementalMerkle = async (N, isWarmup = false) => {
     const tFetch0 = performance.now();
     const res = await credentialsAPI.listAll();
     const allCreds = res.data || res || [];
@@ -140,7 +161,7 @@ const BenchmarkRunner = ({ masterKey }) => {
       const tUpdate1 = performance.now();
 
       log({
-        op: 'merkle-incremental',
+        op: isWarmup ? 'merkle-incremental-warmup' : 'merkle-incremental',
         N,
         fetchMs: tFetch1 - tFetch0,
         initMs: tInit1 - tInit0,
@@ -148,6 +169,42 @@ const BenchmarkRunner = ({ masterKey }) => {
         totalMs: (tFetch1 - tFetch0) + (tInit1 - tInit0) + (tUpdate1 - tUpdate0),
       });
     }
+  };
+
+  const runLoginE2E = async (N) => {
+    if (!masterKey) {
+      throw new Error('Master key required for login e2e benchmark');
+    }
+
+    const t0 = performance.now();
+
+    const userSalt = vaultCrypt.getOrGenerateUserSalt('benchmark-login@test.com');
+    await vaultCrypt.initializeSessionVaultKey(masterKey, userSalt);
+
+    const tFetch0 = performance.now();
+    const res = await credentialsAPI.listAll();
+    const allCreds = res.data || res || [];
+    const creds = allCreds.slice(0, N);
+    const tFetch1 = performance.now();
+
+    const tWarm0 = performance.now();
+    await vaultCrypt.warmDecryptCache(creds, masterKey);
+    const tWarm1 = performance.now();
+
+    const tMerkle0 = performance.now();
+    await computeMerkleRoot(creds);
+    const tMerkle1 = performance.now();
+
+    const t1 = performance.now();
+
+    log({
+      op: 'login-e2e',
+      N,
+      totalMs: t1 - t0,
+      fetchMs: tFetch1 - tFetch0,
+      warmDecryptMs: tWarm1 - tWarm0,
+      merkleMs: tMerkle1 - tMerkle0,
+    });
   };
 
   const download = () => {
@@ -171,6 +228,7 @@ const BenchmarkRunner = ({ masterKey }) => {
     setLogs([]);
 
     try {
+      logEnv();
       // PBKDF2 iteration set for primary benchmark (100k / 310k / 600k)
       const iterationSets = [100000, 310000, 600000];
       const argon2Configs = [
@@ -181,9 +239,13 @@ const BenchmarkRunner = ({ masterKey }) => {
       // Warm-ups
       for (let i = 0; i < 3; i += 1) {
         // eslint-disable-next-line no-await-in-loop
-        await runPBKDF2(310000);
-        await runEncryptDecrypt();
-        await runMerkle(100);
+        await runPBKDF2(310000, true);
+        // eslint-disable-next-line no-await-in-loop
+        await runEncryptDecrypt(true);
+        // eslint-disable-next-line no-await-in-loop
+        await runMerkle(100, true);
+        // eslint-disable-next-line no-await-in-loop
+        await runIncrementalMerkle(100, true);
       }
 
       // Merkle scaling up to 5000 credentials (as reported in paper)
@@ -194,7 +256,7 @@ const BenchmarkRunner = ({ masterKey }) => {
           // eslint-disable-next-line no-await-in-loop
           for (let i = 0; i < 10; i += 1) {
             // eslint-disable-next-line no-await-in-loop
-            await runPBKDF2(iters);
+            await runPBKDF2(iters, false);
             if (includeArgon2) {
               // eslint-disable-next-line no-await-in-loop
               for (const cfg of argon2Configs) {
@@ -203,13 +265,20 @@ const BenchmarkRunner = ({ masterKey }) => {
               }
             }
             // eslint-disable-next-line no-await-in-loop
-            await runEncryptDecrypt();
+            await runEncryptDecrypt(false);
             // eslint-disable-next-line no-await-in-loop
-            await runMerkle(N);
+            await runMerkle(N, false);
             // eslint-disable-next-line no-await-in-loop
-            await runIncrementalMerkle(N);
+            await runIncrementalMerkle(N, false);
           }
         }
+      }
+
+      // End-to-end login-style benchmark for representative sizes
+      const loginSizes = [100, 1000, 5000];
+      for (const N of loginSizes) {
+        // eslint-disable-next-line no-await-in-loop
+        await runLoginE2E(N);
       }
     } catch (e) {
       // eslint-disable-next-line no-alert

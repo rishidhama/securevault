@@ -22,6 +22,24 @@ function analyzeClient(clientPath) {
 
   console.log('=== Client-side crypto ===');
 
+  const envEntry = data.find((d) => d.op === 'env');
+  if (envEntry) {
+    console.log('Environment:');
+    console.log('  userAgent:', envEntry.userAgent || '');
+    console.log('  language:', envEntry.language || '');
+    console.log('  hardwareConcurrency:', envEntry.hardwareConcurrency || 'n/a');
+    console.log('  deviceMemory (GB):', envEntry.deviceMemory || 'n/a');
+    if (envEntry.screen) {
+      console.log(
+        '  screen:',
+        `${envEntry.screen.width || 'n/a'}x${envEntry.screen.height || 'n/a'}`,
+      );
+    }
+    if (envEntry.timezone) {
+      console.log('  timezone:', envEntry.timezone);
+    }
+  }
+
   const pbkdfByIter = {};
   data
     .filter((d) => d.op === 'pbkdf2' && typeof d.timeMs === 'number')
@@ -113,6 +131,52 @@ function analyzeClient(clientPath) {
       const arr = byN[N];
       console.log(N, median(arr).toFixed(2), '/', p95(arr).toFixed(2));
     });
+
+  const incrByNInit = {};
+  const incrByNUpdate = {};
+  data.forEach((d) => {
+    if (d.op === 'merkle-incremental' && typeof d.N === 'number') {
+      if (!incrByNInit[d.N]) incrByNInit[d.N] = [];
+      if (!incrByNUpdate[d.N]) incrByNUpdate[d.N] = [];
+      if (typeof d.initMs === 'number') incrByNInit[d.N].push(d.initMs);
+      if (typeof d.updateMs === 'number') incrByNUpdate[d.N].push(d.updateMs);
+    }
+  });
+  if (Object.keys(incrByNInit).length) {
+    console.log('\nIncremental Merkle init/update ms by N (median / p95):');
+    Object.keys(incrByNInit)
+      .map((n) => parseInt(n, 10))
+      .sort((a, b) => a - b)
+      .forEach((N) => {
+        const initArr = incrByNInit[N] || [];
+        const updArr = incrByNUpdate[N] || [];
+        console.log(
+          N,
+          'init',
+          initArr.length ? `${median(initArr).toFixed(2)} / ${p95(initArr).toFixed(2)}` : 'n/a',
+          'update',
+          updArr.length ? `${median(updArr).toFixed(2)} / ${p95(updArr).toFixed(2)}` : 'n/a',
+        );
+      });
+  }
+
+  const loginByN = {};
+  data.forEach((d) => {
+    if (d.op === 'login-e2e' && typeof d.N === 'number' && typeof d.totalMs === 'number') {
+      if (!loginByN[d.N]) loginByN[d.N] = [];
+      loginByN[d.N].push(d.totalMs);
+    }
+  });
+  if (Object.keys(loginByN).length) {
+    console.log('\nEnd-to-end login-style benchmark ms by N (median / p95):');
+    Object.keys(loginByN)
+      .map((n) => parseInt(n, 10))
+      .sort((a, b) => a - b)
+      .forEach((N) => {
+        const arr = loginByN[N];
+        console.log(N, median(arr).toFixed(2), '/', p95(arr).toFixed(2));
+      });
+  }
 }
 
 function analyzeServer(serverPath) {
