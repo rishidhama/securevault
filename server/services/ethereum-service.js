@@ -10,6 +10,10 @@ class VaultChain {
   constructor() {
     this.enabled = process.env.ETHEREUM_ENABLED === 'true';
     // Support both L1 (Sepolia) and L2 (Arbitrum) RPC URLs
+    // For testnet benchmarking, use Arbitrum Sepolia:
+    // ARBITRUM_RPC_URL=https://sepolia-rollup.arbitrum.io/rpc
+    // Chain ID: 421614 (Arbitrum Sepolia testnet)
+    // For mainnet: Chain ID: 42161 (Arbitrum One)
     this.rpcUrl = process.env.ARBITRUM_RPC_URL || process.env.SEPOLIA_RPC_URL;
     this.privateKey = process.env.WALLET_PRIVATE_KEY;
     this.contractAddress = process.env.CONTRACT_ADDRESS;
@@ -52,9 +56,15 @@ class VaultChain {
       
       // Detect network type
       const isArbitrum = network.chainId === 42161 || network.chainId === 421614; // Arbitrum One or Sepolia
-      const networkName = isArbitrum ? 'Arbitrum' : network.name;
+      const isTestnet = network.chainId === 421614 || network.chainId === 11155111; // Arbitrum Sepolia or Sepolia
+      const networkName = isArbitrum 
+        ? (network.chainId === 421614 ? 'Arbitrum Sepolia (Testnet)' : 'Arbitrum One (Mainnet)')
+        : network.name;
       
       console.log(`Connected to ${networkName} (Chain ID: ${network.chainId})`);
+      if (isTestnet) {
+        console.log('⚠️  TESTNET MODE - Using testnet for benchmarking');
+      }
       console.log(`Contract version: ${this.contractVersion}`);
       console.log(`Wallet: ${this.wallet.address}`);
       console.log(`Balance: ${ethers.utils.formatEther(balance)} ETH`);

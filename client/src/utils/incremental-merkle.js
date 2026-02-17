@@ -125,12 +125,22 @@ class IncrementalMerkleTree {
     }
 
     const leafIndex = this.leafIndexMap.get(credId);
+    
+    if (leafIndex >= this.levels[0].length) {
+      return this.rebuild();
+    }
+
     this.levels[0][leafIndex] = newLeafHash;
 
     let currentIndex = leafIndex;
     for (let levelIdx = 0; levelIdx < this.levels.length - 1; levelIdx++) {
       const level = this.levels[levelIdx];
       const pairIndex = Math.floor(currentIndex / 2);
+      
+      if (pairIndex * 2 >= level.length) {
+        return this.rebuild();
+      }
+
       const left = level[pairIndex * 2];
       const right = pairIndex * 2 + 1 < level.length
         ? level[pairIndex * 2 + 1]
@@ -138,6 +148,11 @@ class IncrementalMerkleTree {
 
       const parentHash = await hashPair(left, right);
       const nextLevel = this.levels[levelIdx + 1];
+      
+      if (pairIndex >= nextLevel.length) {
+        return this.rebuild();
+      }
+      
       nextLevel[pairIndex] = parentHash;
       currentIndex = pairIndex;
     }
@@ -164,37 +179,40 @@ class IncrementalMerkleTree {
     let currentIndex = newIndex;
     let levelIdx = 0;
 
-    while (levelIdx < this.levels.length - 1) {
+    while (true) {
       const level = this.levels[levelIdx];
       const pairIndex = Math.floor(currentIndex / 2);
+      
+      if (pairIndex * 2 >= level.length) {
+        break;
+      }
+
       const left = level[pairIndex * 2];
       const right = pairIndex * 2 + 1 < level.length
         ? level[pairIndex * 2 + 1]
-        : left;
+        : level[pairIndex * 2];
 
       const parentHash = await hashPair(left, right);
 
-      if (pairIndex < this.levels[levelIdx + 1].length) {
-        this.levels[levelIdx + 1][pairIndex] = parentHash;
+      if (levelIdx + 1 < this.levels.length) {
+        if (pairIndex < this.levels[levelIdx + 1].length) {
+          this.levels[levelIdx + 1][pairIndex] = parentHash;
+        } else {
+          this.levels[levelIdx + 1].push(parentHash);
+        }
       } else {
-        this.levels[levelIdx + 1].push(parentHash);
+        this.levels.push([parentHash]);
       }
 
       currentIndex = pairIndex;
       levelIdx++;
+
+      if (levelIdx >= this.levels.length || this.levels[levelIdx].length <= 1) {
+        break;
+      }
     }
 
-    if (this.levels[levelIdx].length > 1) {
-      const topLevel = this.levels[levelIdx];
-      const left = topLevel[topLevel.length - 2];
-      const right = topLevel[topLevel.length - 1];
-      const newRoot = await hashPair(left, right);
-      this.levels.push([newRoot]);
-      this.root = newRoot;
-    } else {
-      this.root = this.levels[levelIdx][0];
-    }
-
+    this.root = this.levels[this.levels.length - 1][0];
     return this.root;
   }
 
