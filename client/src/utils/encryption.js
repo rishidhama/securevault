@@ -21,10 +21,13 @@ class VaultCrypt {
   }
 
   _arrayBufferToBase64(buffer) {
+    // Performance optimization: Use efficient conversion instead of O(n²) string concatenation
     const bytes = new Uint8Array(buffer);
+    // For small buffers, direct conversion is fine
     if (bytes.length < 8192) {
       return btoa(String.fromCharCode.apply(null, bytes));
     }
+    // For large buffers, process in chunks to avoid call stack limits
     const chunks = [];
     for (let i = 0; i < bytes.length; i += 8192) {
       const chunk = bytes.slice(i, i + 8192);
@@ -101,7 +104,9 @@ class VaultCrypt {
         throw new Error('Salt is required and must be a string');
       }
 
-      const iters = iterationsOverride > 0 ? iterationsOverride : this.iterations;
+      const iters = typeof iterationsOverride === 'number' && iterationsOverride > 0
+        ? iterationsOverride
+        : this.iterations;
 
       // Performance optimization: Check if master key changed, clear baseKey cache if so
       if (this._cachedMasterKey !== masterKey) {
@@ -112,17 +117,20 @@ class VaultCrypt {
         this._keyCache.clear();
       }
 
-      if (!this._baseKeyCache) {
+      let baseKey = this._baseKeyCache;
+      if (!baseKey) {
+        // Cache encoded master key to avoid re-encoding
         if (!this._encodedMasterKeyCache) {
           this._encodedMasterKeyCache = this._encoder.encode(masterKey);
         }
-        this._baseKeyCache = await window.crypto.subtle.importKey(
+        baseKey = await (window.crypto.subtle).importKey(
           'raw',
           this._encodedMasterKeyCache,
           'PBKDF2',
           false,
           ['deriveKey']
         );
+        this._baseKeyCache = baseKey;
       }
 
       const keyCacheKey = `${masterKey}|${saltBase64}|${iters}`;
@@ -130,14 +138,14 @@ class VaultCrypt {
       
       if (!derivedKey) {
         const salt = this._base64ToArrayBuffer(saltBase64);
-        derivedKey = await window.crypto.subtle.deriveKey(
+        derivedKey = await (window.crypto.subtle).deriveKey(
           {
             name: 'PBKDF2',
             salt: salt,
             iterations: iters,
             hash: 'SHA-256'
           },
-          this._baseKeyCache,
+          baseKey,
           {
             name: 'AES-GCM',
             length: this.keySizeBits
@@ -146,7 +154,9 @@ class VaultCrypt {
           ['encrypt', 'decrypt']
         );
         
+        // Cache the derived key (limit cache size to prevent memory issues)
         if (this._keyCache.size >= 1000) {
+          // Simple eviction: clear oldest 50% when limit reached
           const entries = Array.from(this._keyCache.entries());
           this._keyCache.clear();
           entries.slice(-500).forEach(([k, v]) => this._keyCache.set(k, v));
@@ -265,6 +275,7 @@ class VaultCrypt {
   async warmDecryptCache(items, masterKey, concurrency = 10) {
     if (!Array.isArray(items) || !masterKey) return;
     
+    // Performance optimization: Process items in parallel with concurrency limit
     const toProcess = [];
     for (const item of items) {
       const { encryptedPassword, iv, salt } = item || {};
@@ -274,6 +285,7 @@ class VaultCrypt {
       toProcess.push({ encryptedPassword, iv, salt, cacheKey });
     }
 
+    // Process in batches to limit concurrency
     for (let i = 0; i < toProcess.length; i += concurrency) {
       const batch = toProcess.slice(i, i + concurrency);
       const results = await Promise.allSettled(
@@ -324,6 +336,7 @@ class VaultCrypt {
       charset = charset.replace(/[0O1Il]/g, '');
     }
 
+    // Performance optimization: Generate random bytes in batches instead of one-by-one
     const charsetLength = charset.length;
     const randomBytes = this._randomBytes(length * 2); // Generate extra for safety
     const passwordChars = [];

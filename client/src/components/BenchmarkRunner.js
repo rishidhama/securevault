@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import vaultCrypt from '../utils/encryption';
 import { computeMerkleRoot } from '../utils/merkle';
+import IncrementalMerkleTree from '../utils/incremental-merkle';
 import { credentialsAPI } from '../services/api';
 
 const BenchmarkRunner = ({ masterKey }) => {
@@ -68,7 +69,6 @@ const BenchmarkRunner = ({ masterKey }) => {
 
   const runMerkle = async (N) => {
     const tFetch0 = performance.now();
-    // Use getAll=true to get all credentials for benchmark (maintains original behavior)
     const res = await credentialsAPI.listAll();
     const allCreds = res.data || res || [];
     const creds = allCreds.slice(0, N);
@@ -85,6 +85,35 @@ const BenchmarkRunner = ({ masterKey }) => {
       merkleMs: tMerkle1 - tMerkle0,
       totalMs: (tFetch1 - tFetch0) + (tMerkle1 - tMerkle0),
     });
+  };
+
+  const runIncrementalMerkle = async (N) => {
+    const tFetch0 = performance.now();
+    const res = await credentialsAPI.listAll();
+    const allCreds = res.data || res || [];
+    const creds = allCreds.slice(0, N);
+    const tFetch1 = performance.now();
+
+    const tree = new IncrementalMerkleTree();
+    const tInit0 = performance.now();
+    await tree.initFromCredentials(creds);
+    const tInit1 = performance.now();
+
+    if (creds.length > 0) {
+      const testCred = creds[0];
+      const tUpdate0 = performance.now();
+      await tree.updateLeaf(testCred._id || testCred.id, testCred);
+      const tUpdate1 = performance.now();
+
+      log({
+        op: 'merkle-incremental',
+        N,
+        fetchMs: tFetch1 - tFetch0,
+        initMs: tInit1 - tInit0,
+        updateMs: tUpdate1 - tUpdate0,
+        totalMs: (tFetch1 - tFetch0) + (tInit1 - tInit0) + (tUpdate1 - tUpdate0),
+      });
+    }
   };
 
   const download = () => {
@@ -132,6 +161,8 @@ const BenchmarkRunner = ({ masterKey }) => {
             await runEncryptDecrypt();
             // eslint-disable-next-line no-await-in-loop
             await runMerkle(N);
+            // eslint-disable-next-line no-await-in-loop
+            await runIncrementalMerkle(N);
           }
         }
       }

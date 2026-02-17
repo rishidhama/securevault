@@ -25,7 +25,7 @@ import BenchmarkRunner from './components/BenchmarkRunner';
 import { credentialsAPI, blockchainAPI } from './services/api';
 import encryptionService from './utils/encryption';
 import { authAPI } from './services/api';
-import { computeMerkleRoot } from './utils/merkle';
+import IncrementalMerkleTree from './utils/incremental-merkle';
 
 import './index.css';
 
@@ -62,6 +62,7 @@ function App() {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('all');
   const [showFavorites, setShowFavorites] = useState(false);
+  const [merkleTree] = useState(() => new IncrementalMerkleTree());
 
   useEffect(() => {
     checkAuthStatus();
@@ -204,6 +205,10 @@ function App() {
       setStats(statsResponse.data || statsResponse || { total: 0, favorites: 0, categories: 0 });
       setCategories(categoriesResponse.data || categoriesResponse || []);
 
+      if (creds.length > 0) {
+        await merkleTree.initFromCredentials(creds);
+      }
+
       if (masterKey) {
         encryptionService.warmDecryptCache(creds, masterKey).catch(() => {});
       }
@@ -306,6 +311,7 @@ function App() {
       setSearchTerm('');
       setSelectedCategory('all');
       setShowFavorites(false);
+      merkleTree.clear();
     }
   };
 
@@ -340,19 +346,17 @@ function App() {
 
       try { await encryptionService.warmDecryptCache([newCredentialData], masterKey); } catch (_) {}
 
-      // Performance: Make blockchain anchoring async/non-blocking (don't wait for it)
-      // This prevents 12+ second delays on credential operations
       if (user?.id) {
         (async () => {
-      try {
-        const updated = [newCredentialData, ...credentials];
-        const root = await computeMerkleRoot(updated);
+          try {
+            const credId = newCredentialData._id || newCredentialData.id;
+            const root = await merkleTree.addLeaf(credId, newCredentialData);
             if (root) {
               blockchainAPI.storeVault(user.id, { merkleRoot: root }).catch(err => {
                 console.log('Anchoring failed (non-blocking):', err?.message || err);
               });
-        }
-      } catch (e) {
+            }
+          } catch (e) {
             console.log('Anchoring skipped (non-blocking):', e?.message || e);
           }
         })();
@@ -370,18 +374,16 @@ function App() {
       setCredentials(prev => prev.filter(cred => cred._id !== id));
       setStats(prev => ({ ...prev, total: prev.total - 1 }));
 
-      // Performance: Make blockchain anchoring async/non-blocking
       if (user?.id) {
         (async () => {
-      try {
-        const updated = credentials.filter(cred => cred._id !== id);
-        const root = await computeMerkleRoot(updated);
+          try {
+            const root = await merkleTree.deleteLeaf(id);
             if (root) {
               blockchainAPI.storeVault(user.id, { merkleRoot: root }).catch(err => {
                 console.log('Anchoring failed (non-blocking):', err?.message || err);
               });
-        }
-      } catch (e) {
+            }
+          } catch (e) {
             console.log('Anchoring skipped (non-blocking):', e?.message || e);
           }
         })();
@@ -412,22 +414,25 @@ function App() {
   const handleUpdateCredential = async (id, updates) => {
     try {
       const response = await credentialsAPI.update(id, updates);
-      let updatedList;
+      let updatedCredential;
       setCredentials(prev => {
-        updatedList = prev.map(cred => cred._id === id ? { ...cred, ...response.data } : cred);
-        return updatedList;
+        updatedCredential = prev.find(cred => cred._id === id);
+        const updated = { ...updatedCredential, ...response.data };
+        return prev.map(cred => cred._id === id ? updated : cred);
       });
 
       if (user?.id) {
         (async () => {
-      try {
-        const root = await computeMerkleRoot(updatedList || credentials);
+          try {
+            const credId = id;
+            const updated = updatedCredential ? { ...updatedCredential, ...response.data } : response.data;
+            const root = await merkleTree.updateLeaf(credId, updated);
             if (root) {
               blockchainAPI.storeVault(user.id, { merkleRoot: root }).catch(err => {
                 console.log('Anchoring failed (non-blocking):', err?.message || err);
               });
-        }
-      } catch (e) {
+            }
+          } catch (e) {
             console.log('Anchoring skipped (non-blocking):', e?.message || e);
           }
         })();
