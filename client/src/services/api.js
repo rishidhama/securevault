@@ -56,9 +56,9 @@ export const authAPI = {
   
   changeMasterKey: (currentAuthSecret, newAuthSecret) =>
     apiRequest('/api/auth/change-master-key', {
-      method: 'POST',
+    method: 'POST',
       body: JSON.stringify({ currentAuthSecret, newAuthSecret })
-    }),
+  }),
   
   deleteAccount: () => apiRequest('/api/auth/delete-account', {
     method: 'DELETE'

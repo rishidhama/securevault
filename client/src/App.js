@@ -348,15 +348,15 @@ function App() {
 
       if (user?.id) {
         (async () => {
-          try {
+      try {
             const credId = newCredentialData._id || newCredentialData.id;
             const root = await merkleTree.addLeaf(credId, newCredentialData);
             if (root) {
               blockchainAPI.storeVault(user.id, { merkleRoot: root }).catch(err => {
                 console.log('Anchoring failed (non-blocking):', err?.message || err);
               });
-            }
-          } catch (e) {
+        }
+      } catch (e) {
             console.log('Anchoring skipped (non-blocking):', e?.message || e);
           }
         })();
@@ -376,14 +376,14 @@ function App() {
 
       if (user?.id) {
         (async () => {
-          try {
+      try {
             const root = await merkleTree.deleteLeaf(id);
             if (root) {
               blockchainAPI.storeVault(user.id, { merkleRoot: root }).catch(err => {
                 console.log('Anchoring failed (non-blocking):', err?.message || err);
               });
-            }
-          } catch (e) {
+        }
+      } catch (e) {
             console.log('Anchoring skipped (non-blocking):', e?.message || e);
           }
         })();
@@ -423,7 +423,7 @@ function App() {
 
       if (user?.id) {
         (async () => {
-          try {
+      try {
             const credId = id;
             const updated = updatedCredential ? { ...updatedCredential, ...response.data } : response.data;
             const root = await merkleTree.updateLeaf(credId, updated);
@@ -431,8 +431,8 @@ function App() {
               blockchainAPI.storeVault(user.id, { merkleRoot: root }).catch(err => {
                 console.log('Anchoring failed (non-blocking):', err?.message || err);
               });
-            }
-          } catch (e) {
+        }
+      } catch (e) {
             console.log('Anchoring skipped (non-blocking):', e?.message || e);
           }
         })();

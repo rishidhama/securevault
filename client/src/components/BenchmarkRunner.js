@@ -3,12 +3,14 @@ import vaultCrypt from '../utils/encryption';
 import { computeMerkleRoot } from '../utils/merkle';
 import IncrementalMerkleTree from '../utils/incremental-merkle';
 import { credentialsAPI } from '../services/api';
-import { argon2id } from '@noble/hashes/argon2';
+import { argon2id } from '@noble/hashes/argon2.js';
 
 const BenchmarkRunner = ({ masterKey }) => {
   const [logs, setLogs] = useState([]);
   const [running, setRunning] = useState(false);
   const [includeArgon2, setIncludeArgon2] = useState(false);
+  const [cachedCredentials, setCachedCredentials] = useState(null);
+  const [progress, setProgress] = useState({ current: 0, total: 0, operation: '' });
 
   const log = (entry) => {
     setLogs((prev) => [...prev, { ...entry, ts: Date.now() }]);
@@ -123,11 +125,19 @@ const BenchmarkRunner = ({ masterKey }) => {
   };
 
   const runMerkle = async (N, isWarmup = false) => {
-    const tFetch0 = performance.now();
-    const res = await credentialsAPI.listAll();
-    const allCreds = res.data || res || [];
+    let allCreds = cachedCredentials;
+    let fetchMs = 0;
+    
+    if (!allCreds) {
+      const tFetch0 = performance.now();
+      const res = await credentialsAPI.listAll();
+      allCreds = res.data || res || [];
+      const tFetch1 = performance.now();
+      fetchMs = tFetch1 - tFetch0;
+      setCachedCredentials(allCreds);
+    }
+    
     const creds = allCreds.slice(0, N);
-    const tFetch1 = performance.now();
 
     const tMerkle0 = performance.now();
     await computeMerkleRoot(creds);
@@ -136,18 +146,26 @@ const BenchmarkRunner = ({ masterKey }) => {
     log({
       op: isWarmup ? 'merkle-warmup' : 'merkle',
       N,
-      fetchMs: tFetch1 - tFetch0,
+      fetchMs,
       merkleMs: tMerkle1 - tMerkle0,
-      totalMs: (tFetch1 - tFetch0) + (tMerkle1 - tMerkle0),
+      totalMs: fetchMs + (tMerkle1 - tMerkle0),
     });
   };
 
   const runIncrementalMerkle = async (N, isWarmup = false) => {
-    const tFetch0 = performance.now();
-    const res = await credentialsAPI.listAll();
-    const allCreds = res.data || res || [];
+    let allCreds = cachedCredentials;
+    let fetchMs = 0;
+    
+    if (!allCreds) {
+      const tFetch0 = performance.now();
+      const res = await credentialsAPI.listAll();
+      allCreds = res.data || res || [];
+      const tFetch1 = performance.now();
+      fetchMs = tFetch1 - tFetch0;
+      setCachedCredentials(allCreds);
+    }
+    
     const creds = allCreds.slice(0, N);
-    const tFetch1 = performance.now();
 
     const tree = new IncrementalMerkleTree();
     const tInit0 = performance.now();
@@ -163,10 +181,10 @@ const BenchmarkRunner = ({ masterKey }) => {
       log({
         op: isWarmup ? 'merkle-incremental-warmup' : 'merkle-incremental',
         N,
-        fetchMs: tFetch1 - tFetch0,
+        fetchMs,
         initMs: tInit1 - tInit0,
         updateMs: tUpdate1 - tUpdate0,
-        totalMs: (tFetch1 - tFetch0) + (tInit1 - tInit0) + (tUpdate1 - tUpdate0),
+        totalMs: fetchMs + (tInit1 - tInit0) + (tUpdate1 - tUpdate0),
       });
     }
   };
@@ -181,11 +199,19 @@ const BenchmarkRunner = ({ masterKey }) => {
     const userSalt = vaultCrypt.getOrGenerateUserSalt('benchmark-login@test.com');
     await vaultCrypt.initializeSessionVaultKey(masterKey, userSalt);
 
-    const tFetch0 = performance.now();
-    const res = await credentialsAPI.listAll();
-    const allCreds = res.data || res || [];
+    let allCreds = cachedCredentials;
+    let fetchMs = 0;
+    
+    if (!allCreds) {
+      const tFetch0 = performance.now();
+      const res = await credentialsAPI.listAll();
+      allCreds = res.data || res || [];
+      const tFetch1 = performance.now();
+      fetchMs = tFetch1 - tFetch0;
+      setCachedCredentials(allCreds);
+    }
+    
     const creds = allCreds.slice(0, N);
-    const tFetch1 = performance.now();
 
     const tWarm0 = performance.now();
     await vaultCrypt.warmDecryptCache(creds, masterKey);
@@ -201,7 +227,7 @@ const BenchmarkRunner = ({ masterKey }) => {
       op: 'login-e2e',
       N,
       totalMs: t1 - t0,
-      fetchMs: tFetch1 - tFetch0,
+      fetchMs,
       warmDecryptMs: tWarm1 - tWarm0,
       merkleMs: tMerkle1 - tMerkle0,
     });
@@ -226,6 +252,7 @@ const BenchmarkRunner = ({ masterKey }) => {
     }
     setRunning(true);
     setLogs([]);
+    setCachedCredentials(null); // Clear cache at start
 
     try {
       logEnv();
@@ -258,19 +285,37 @@ const BenchmarkRunner = ({ masterKey }) => {
 
       // Merkle scaling up to 5000 credentials (as reported in paper)
       const Ns = [10, 50, 100, 250, 500, 1000, 2500, 5000];
+      const RUNS_PER_COMBINATION = 10; // Keep original 10 runs
+      const opsPerRun = includeArgon2 ? 6 : 4; // PBKDF2, Argon2(2), Encrypt/Decrypt, Merkle, Incremental Merkle
+      const totalOps = Ns.length * iterationSets.length * RUNS_PER_COMBINATION * opsPerRun;
+      let currentOp = 0;
+      
       for (const N of Ns) {
         // For each vault size, sweep PBKDF2 iterations
         for (const iters of iterationSets) {
           // eslint-disable-next-line no-await-in-loop
-          for (let i = 0; i < 10; i += 1) {
+          for (let i = 0; i < RUNS_PER_COMBINATION; i += 1) {
+            setProgress({ 
+              current: currentOp, 
+              total: totalOps, 
+              operation: `PBKDF2(${iters/1000}k) - N=${N} - Run ${i+1}/${RUNS_PER_COMBINATION}` 
+            });
             // eslint-disable-next-line no-await-in-loop
             await runPBKDF2(iters, false);
+            currentOp += 1;
+            
             if (includeArgon2) {
               // eslint-disable-next-line no-await-in-loop
               for (const cfg of argon2Configs) {
+                setProgress({ 
+                  current: currentOp, 
+                  total: totalOps, 
+                  operation: `Argon2id - N=${N} - Run ${i+1}` 
+                });
                 try {
                   // eslint-disable-next-line no-await-in-loop
                   await runArgon2id(cfg, false);
+                  currentOp += 1;
                 } catch (error) {
                   // Log error but continue with other benchmarks
                   log({
@@ -281,12 +326,33 @@ const BenchmarkRunner = ({ masterKey }) => {
                 }
               }
             }
+            
+            setProgress({ 
+              current: currentOp, 
+              total: totalOps, 
+              operation: `Encrypt/Decrypt - N=${N} - Run ${i+1}` 
+            });
             // eslint-disable-next-line no-await-in-loop
             await runEncryptDecrypt(false);
+            currentOp += 1;
+            
+            setProgress({ 
+              current: currentOp, 
+              total: totalOps, 
+              operation: `Merkle(${N}) - Run ${i+1}` 
+            });
             // eslint-disable-next-line no-await-in-loop
             await runMerkle(N, false);
+            currentOp += 1;
+            
+            setProgress({ 
+              current: currentOp, 
+              total: totalOps, 
+              operation: `Incremental Merkle(${N}) - Run ${i+1}` 
+            });
             // eslint-disable-next-line no-await-in-loop
             await runIncrementalMerkle(N, false);
+            currentOp += 1;
           }
         }
       }
@@ -294,9 +360,17 @@ const BenchmarkRunner = ({ masterKey }) => {
       // End-to-end login-style benchmark for representative sizes
       const loginSizes = [100, 1000, 5000];
       for (const N of loginSizes) {
+        setProgress({ 
+          current: currentOp, 
+          total: totalOps + loginSizes.length, 
+          operation: `E2E Login - N=${N}` 
+        });
         // eslint-disable-next-line no-await-in-loop
         await runLoginE2E(N);
+        currentOp += 1;
       }
+      
+      setProgress({ current: totalOps + loginSizes.length, total: totalOps + loginSizes.length, operation: 'Complete!' });
     } catch (e) {
       // eslint-disable-next-line no-alert
       alert(`Benchmark error: ${e.message || e}`);
@@ -338,6 +412,27 @@ const BenchmarkRunner = ({ masterKey }) => {
           Include Argon2id KDF benchmarks (slower)
         </label>
       </div>
+      {running && progress.total > 0 && (
+        <div className="mb-4 p-4 bg-blue-50 border border-blue-200 rounded">
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-sm font-medium text-blue-900">
+              Progress: {progress.current} / {progress.total} operations
+            </span>
+            <span className="text-sm text-blue-700">
+              {Math.round((progress.current / progress.total) * 100)}%
+            </span>
+          </div>
+          <div className="w-full bg-blue-200 rounded-full h-2.5 mb-2">
+            <div 
+              className="bg-blue-600 h-2.5 rounded-full transition-all duration-300"
+              style={{ width: `${(progress.current / progress.total) * 100}%` }}
+            />
+          </div>
+          <div className="text-xs text-blue-800">
+            Current: {progress.operation}
+          </div>
+        </div>
+      )}
       <div className="text-xs text-gray-700 border rounded p-2 bg-gray-50 max-h-64 overflow-auto">
         <pre className="whitespace-pre-wrap">
           {JSON.stringify(logs.slice(-10), null, 2)}

@@ -23,6 +23,11 @@ class VaultChain {
     this.wallet = null;
     this.contract = null;
     this.initialized = false;
+    this.nonceManager = {
+      currentNonce: null,
+      pendingTransactions: 0,
+      lock: false
+    };
   }
 
   hashUserId(userId) {
@@ -171,6 +176,19 @@ class VaultChain {
         throw new Error('No contract found at specified address');
       }
       
+      // Verify contract has expected function by trying a view call
+      try {
+        if (this.contractVersion === 'l2') {
+          // Try calling getVaultCount() to verify contract is correct
+          const count = await this.contract.getVaultCount();
+          console.log(`Contract verified: getVaultCount() = ${count.toString()}`);
+        }
+      } catch (error) {
+        console.warn(`⚠️  Contract verification failed: ${error.message}`);
+        console.warn(`   This might indicate the contract at ${this.contractAddress} is not the expected L2 contract.`);
+        console.warn(`   Verify CONTRACT_ADDRESS in .env matches the deployed contract.`);
+      }
+      
       console.log(`Contract connection successful (version: ${this.contractVersion})`);
       
     } catch (error) {
@@ -196,11 +214,18 @@ class VaultChain {
       if (this.contractVersion === 'l2') {
         userIdParam = this.hashUserId(userId);
         vaultHashParam = this.hexToBytes32(vaultHash);
+        
+        // Validate vaultHash is not zero (contract requirement)
+        if (vaultHashParam === '0x0000000000000000000000000000000000000000000000000000000000000000') {
+          throw new Error('Vault hash cannot be zero (contract requirement)');
+        }
+        
         console.log(`Transaction details (L2):`, {
           userId,
           userIdHash: userIdParam,
           vaultHash: vaultHash,
-          vaultHashBytes32: vaultHashParam
+          vaultHashBytes32: vaultHashParam,
+          vaultHashIsZero: vaultHashParam === '0x0000000000000000000000000000000000000000000000000000000000000000'
         });
       } else {
         userIdParam = userId;
@@ -220,39 +245,82 @@ class VaultChain {
         console.log(`Estimated gas: ${estimatedGas.toString()}, Using: ${gasLimit.toString()}`);
       } catch (error) {
         console.log(`Gas estimation failed, using default: ${error.message}`);
+        // Try to decode revert reason if available
+        if (error.data) {
+          console.log(`Revert data: ${error.data}`);
+        }
+        if (error.reason) {
+          console.log(`Revert reason: ${error.reason}`);
+        }
         // L2 contracts use less gas, adjust default
         gasLimit = this.contractVersion === 'l2' ? 100000 : 300000;
       }
       
+      // Get and manage nonce to avoid conflicts
+      const nonce = await this._getNextNonce();
+      
       const tx = await this.contract.updateVaultHash(userIdParam, vaultHashParam, {
-        gasLimit: gasLimit
+        gasLimit: gasLimit,
+        nonce: nonce
       });
       
-      console.log(`Transaction sent: ${tx.hash}`);
+      console.log(`Transaction sent: ${tx.hash} (nonce: ${nonce})`);
       
-      const receipt = await tx.wait();
-      const confirmTs = Date.now();
-      console.log(`Transaction confirmed in block ${receipt.blockNumber}`);
+      let receipt;
+      let confirmTs;
+      let success = false;
+      
+      try {
+        receipt = await tx.wait();
+        confirmTs = Date.now();
+        success = receipt.status === 1; // 1 = success, 0 = reverted
+        console.log(`Transaction confirmed in block ${receipt.blockNumber} (status: ${receipt.status === 1 ? 'success' : 'reverted'})`);
+      } catch (error) {
+        // Transaction might have been mined but reverted
+        // Try to get receipt anyway
+        try {
+          receipt = await this.provider.getTransactionReceipt(tx.hash);
+          if (receipt) {
+            confirmTs = Date.now();
+            success = receipt.status === 1;
+            console.log(`Transaction receipt retrieved: block ${receipt.blockNumber} (status: ${receipt.status === 1 ? 'success' : 'reverted'})`);
+          } else {
+            throw error; // Re-throw if no receipt
+          }
+        } catch (e) {
+          // No receipt available yet or other error
+          console.error(`Failed to get transaction receipt: ${error.message}`);
+          throw error;
+        }
+      }
+      
+      // Update nonce manager after confirmation (success or failure)
+      this.nonceManager.pendingTransactions = Math.max(0, this.nonceManager.pendingTransactions - 1);
 
-      // Structured log for benchmarking anchoring latency and gas usage
+      // Structured log for benchmarking anchoring latency and gas usage (even if reverted)
       try {
         const anchorEntry = {
           op: 'anchor',
           userId,
+          success: success,
           contractVersion: this.contractVersion,
           network: networkName,
           txHash: tx.hash,
           submitTs,
-          confirmTs,
-          latencyMs: confirmTs - submitTs,
-          blockNumber: receipt.blockNumber,
-          gasUsed: receipt.gasUsed ? receipt.gasUsed.toString() : null,
-          gasPriceWei: receipt.effectiveGasPrice ? receipt.effectiveGasPrice.toString() : null
+          confirmTs: confirmTs || Date.now(),
+          latencyMs: confirmTs ? (confirmTs - submitTs) : null,
+          blockNumber: receipt ? receipt.blockNumber : null,
+          gasUsed: receipt && receipt.gasUsed ? receipt.gasUsed.toString() : null,
+          gasPriceWei: receipt && receipt.effectiveGasPrice ? receipt.effectiveGasPrice.toString() : null
         };
         // eslint-disable-next-line no-console
         console.log(JSON.stringify(anchorEntry));
       } catch (e) {
         // ignore logging errors
+      }
+      
+      if (!success) {
+        throw new Error(`Transaction reverted: ${tx.hash}`);
       }
       
       return {
@@ -307,15 +375,71 @@ class VaultChain {
         gasLimit = 50000 + (updates.length * 50000);
       }
       
+      // Get and manage nonce to avoid conflicts
+      const nonce = await this._getNextNonce();
+      
       const tx = await this.contract.batchUpdateVaultHash(userIdHashes, vaultHashes, {
-        gasLimit: gasLimit
+        gasLimit: gasLimit,
+        nonce: nonce
       });
       
-      console.log(`Batch transaction sent: ${tx.hash}`);
+      console.log(`Batch transaction sent: ${tx.hash} (nonce: ${nonce})`);
       
-      const receipt = await tx.wait();
-      const confirmTs = Date.now();
-      console.log(`Batch transaction confirmed in block ${receipt.blockNumber}`);
+      let receipt;
+      let confirmTs;
+      let success = false;
+      
+      try {
+        receipt = await tx.wait();
+        confirmTs = Date.now();
+        success = receipt.status === 1; // 1 = success, 0 = reverted
+        console.log(`Batch transaction confirmed in block ${receipt.blockNumber} (status: ${receipt.status === 1 ? 'success' : 'reverted'})`);
+      } catch (error) {
+        // Transaction might have been mined but reverted
+        try {
+          receipt = await this.provider.getTransactionReceipt(tx.hash);
+          if (receipt) {
+            confirmTs = Date.now();
+            success = receipt.status === 1;
+            console.log(`Batch transaction receipt retrieved: block ${receipt.blockNumber} (status: ${receipt.status === 1 ? 'success' : 'reverted'})`);
+          } else {
+            throw error;
+          }
+        } catch (e) {
+          console.error(`Failed to get batch transaction receipt: ${error.message}`);
+          throw error;
+        }
+      }
+      
+      // Update nonce manager after confirmation (success or failure)
+      this.nonceManager.pendingTransactions = Math.max(0, this.nonceManager.pendingTransactions - 1);
+
+      // Structured log for benchmarking batch anchoring latency and gas usage (even if reverted)
+      try {
+        const anchorEntry = {
+          op: 'anchor',
+          batch: true,
+          success: success,
+          itemsUpdated: updates.length,
+          contractVersion: this.contractVersion,
+          network: networkName,
+          txHash: tx.hash,
+          submitTs,
+          confirmTs: confirmTs || Date.now(),
+          latencyMs: confirmTs ? (confirmTs - submitTs) : null,
+          blockNumber: receipt ? receipt.blockNumber : null,
+          gasUsed: receipt && receipt.gasUsed ? receipt.gasUsed.toString() : null,
+          gasPriceWei: receipt && receipt.effectiveGasPrice ? receipt.effectiveGasPrice.toString() : null
+        };
+        // eslint-disable-next-line no-console
+        console.log(JSON.stringify(anchorEntry));
+      } catch (e) {
+        // ignore logging errors
+      }
+
+      if (!success) {
+        throw new Error(`Batch transaction reverted: ${tx.hash}`);
+      }
 
       return {
         success: true,
@@ -416,6 +540,42 @@ class VaultChain {
       console.error('Failed to get transaction history:', error.message);
       return [];
     }
+  }
+
+  /**
+   * Get next nonce with proper management to avoid conflicts
+   * Uses a local counter that syncs with blockchain state
+   */
+  async _getNextNonce() {
+    // Wait for lock to be released
+    while (this.nonceManager.lock) {
+      await new Promise(resolve => setTimeout(resolve, 50));
+    }
+    
+    this.nonceManager.lock = true;
+    try {
+      // If we don't have a current nonce, fetch from blockchain
+      if (this.nonceManager.currentNonce === null) {
+        this.nonceManager.currentNonce = await this.wallet.getTransactionCount('pending');
+      }
+      
+      // Use current nonce and increment for next time
+      const nonce = this.nonceManager.currentNonce;
+      this.nonceManager.currentNonce += 1;
+      this.nonceManager.pendingTransactions += 1;
+      
+      return nonce;
+    } finally {
+      this.nonceManager.lock = false;
+    }
+  }
+
+  /**
+   * Reset nonce manager (call after successful transaction confirmation)
+   */
+  _resetNonceManager() {
+    this.nonceManager.currentNonce = null;
+    this.nonceManager.pendingTransactions = 0;
   }
 }
 

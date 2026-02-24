@@ -65,7 +65,10 @@ class BatchQueue {
     if (changed) this.stats.totalChanged++;
 
     const state = this.pending.get(userId);
-    if (state && state.pendingCount >= this.maxUpdates) {
+    // Don't flush immediately on maxUpdates - let the timer batch multiple users together
+    // Only trigger flush if we're way over the limit (safety check)
+    if (state && state.pendingCount > this.maxUpdates * 2) {
+      // Safety: if a user has way too many pending updates, flush to prevent memory issues
       await this.flushDueUsers({ forceUserId: userId });
     }
 
@@ -98,7 +101,9 @@ class BatchQueue {
     if (dueStates.length === 0) return { success: true, flushed: 0, mode: 'noop' };
 
     dueStates.sort((a, b) => (a.firstPendingAt || 0) - (b.firstPendingAt || 0));
-    const slice = dueStates.slice(0, Math.max(1, this.maxUpdates));
+    // Batch up to maxUpdates users together (not maxUpdates updates per user)
+    // This allows multiple users to be batched in a single transaction
+    const slice = dueStates.slice(0, Math.min(dueStates.length, this.maxUpdates));
 
     if (contractVersion === 'l2' && slice.length > 1) {
       const updates = slice.map(s => ({ userId: s.userId, vaultHash: s.latestVaultHash }));
