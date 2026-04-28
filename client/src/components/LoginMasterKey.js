@@ -525,7 +525,7 @@ const LoginMasterKey = ({ onLoginSuccess }) => {
               <div className="mt-4 text-sm text-secondary-600">
                 <div className="flex items-center gap-2">
                   <CheckCircle className="w-4 h-4 text-success-600" /> 
-                  Client-side AES-256-CBC decryption
+                  Client-side AES-256-GCM decryption
                 </div>
                 <div className="flex items-center gap-2">
                   <CheckCircle className="w-4 h-4 text-success-600" /> 

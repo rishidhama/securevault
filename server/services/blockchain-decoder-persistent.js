@@ -15,6 +15,24 @@ const blockchainOperationSchema = new mongoose.Schema({
 
 const BlockchainOperation = mongoose.model('BlockchainOperation', blockchainOperationSchema);
 
+// Pending operations: queued in batch mode (or awaiting txHash persistence).
+const pendingOperationSchema = new mongoose.Schema({
+  userId: { type: String, required: true, index: true },
+  action: { type: String, required: true },
+  credentialId: { type: String, required: true },
+  vaultData: { type: Object, required: true },
+  vaultHash: { type: String, required: true, index: true },
+  credentialData: { type: Object },
+  status: { type: String, enum: ['queued', 'anchored', 'superseded'], default: 'queued', index: true },
+  txHash: { type: String, default: null },
+  blockNumber: { type: Number, default: null },
+  createdAt: { type: Date, default: Date.now, index: true },
+  anchoredAt: { type: Date, default: null }
+});
+
+pendingOperationSchema.index({ userId: 1, status: 1, createdAt: -1 });
+const BlockchainPendingOperation = mongoose.model('BlockchainPendingOperation', pendingOperationSchema);
+
 /**
  * Persistent Blockchain Decoder Service
  * 
@@ -25,6 +43,68 @@ const BlockchainOperation = mongoose.model('BlockchainOperation', blockchainOper
 class PersistentBlockchainDecoder {
   constructor() {
     this.operationCache = new Map(); // Cache for decoded operations
+  }
+
+  async storePendingOperation(operationData) {
+    try {
+      const doc = await BlockchainPendingOperation.create({
+        userId: operationData.userId,
+        action: operationData.action,
+        credentialId: operationData.credentialId,
+        vaultData: operationData.vaultData,
+        vaultHash: operationData.vaultHash,
+        credentialData: operationData.credentialData || null,
+        status: 'queued'
+      });
+      return doc;
+    } catch (error) {
+      console.error('Failed to store pending operation:', error.message);
+      return null;
+    }
+  }
+
+  async markAnchoredForUser(userId, opts) {
+    try {
+      const { txHash, blockNumber, vaultHash } = opts || {};
+      if (!userId || !txHash) return { anchored: 0, superseded: 0 };
+
+      // If we know which vaultHash was anchored, anchor that and supersede older queued hashes.
+      if (vaultHash) {
+        const anchoredRes = await BlockchainPendingOperation.updateMany(
+          { userId, status: 'queued', vaultHash },
+          { $set: { status: 'anchored', txHash, blockNumber: blockNumber || null, anchoredAt: new Date() } }
+        );
+        const supersededRes = await BlockchainPendingOperation.updateMany(
+          { userId, status: 'queued', vaultHash: { $ne: vaultHash } },
+          { $set: { status: 'superseded', anchoredAt: new Date() } }
+        );
+        return { anchored: anchoredRes.modifiedCount || 0, superseded: supersededRes.modifiedCount || 0 };
+      }
+
+      // Fallback: anchor all queued items for the user.
+      const res = await BlockchainPendingOperation.updateMany(
+        { userId, status: 'queued' },
+        { $set: { status: 'anchored', txHash, blockNumber: blockNumber || null, anchoredAt: new Date() } }
+      );
+      return { anchored: res.modifiedCount || 0, superseded: 0 };
+    } catch (error) {
+      console.error('Failed to mark anchored operations:', error.message);
+      return { anchored: 0, superseded: 0 };
+    }
+  }
+
+  async markSupersededByHash(userId, vaultHash) {
+    try {
+      if (!userId || !vaultHash) return 0;
+      const res = await BlockchainPendingOperation.updateMany(
+        { userId, status: 'queued', vaultHash },
+        { $set: { status: 'superseded', anchoredAt: new Date() } }
+      );
+      return res.modifiedCount || 0;
+    } catch (error) {
+      console.error('Failed to mark superseded operations:', error.message);
+      return 0;
+    }
   }
 
   async storeOperationDetails(txHash, operationData) {
@@ -90,6 +170,77 @@ class PersistentBlockchainDecoder {
       console.error('Failed to get user transaction history:', error.message);
       return [];
     }
+  }
+
+  async getUserPendingOperations(userId) {
+    try {
+      const ops = await BlockchainPendingOperation.find({ userId, status: 'queued' })
+        .sort({ createdAt: -1 })
+        .limit(100);
+      return ops.map(op => ({
+        status: op.status,
+        action: op.action,
+        credentialId: op.credentialId,
+        vaultHash: op.vaultHash,
+        title: op.credentialData?.title || 'Unknown',
+        category: op.credentialData?.category || 'Unknown',
+        hasUrl: op.credentialData?.hasUrl || false,
+        createdAt: op.createdAt
+      }));
+    } catch (error) {
+      console.error('Failed to get pending operations:', error.message);
+      return [];
+    }
+  }
+
+  async getUserAnchoredOperations(userId) {
+    try {
+      const anchoredFromPending = await BlockchainPendingOperation.find({ userId, status: 'anchored' })
+        .sort({ anchoredAt: -1, createdAt: -1 })
+        .limit(100);
+
+      return anchoredFromPending.map(op => ({
+        txHash: op.txHash,
+        timestamp: Math.floor((op.anchoredAt || op.createdAt).getTime() / 1000),
+        blockNumber: op.blockNumber || 0,
+        action: op.action,
+        credentialId: op.credentialId,
+        vaultHash: op.vaultHash,
+        credentialData: op.credentialData || null,
+        title: op.credentialData?.title || 'Unknown',
+        category: op.credentialData?.category || 'Unknown',
+        hasUrl: op.credentialData?.hasUrl || false
+      }));
+    } catch (error) {
+      console.error('Failed to get anchored operations:', error.message);
+      return [];
+    }
+  }
+
+  async getLatestQueuedOperation(userId) {
+    try {
+      const op = await BlockchainPendingOperation.findOne({ userId, status: 'queued' })
+        .sort({ createdAt: -1 });
+      if (!op) return null;
+      return {
+        userId: op.userId,
+        action: op.action,
+        credentialId: op.credentialId,
+        vaultHash: op.vaultHash,
+        createdAt: op.createdAt
+      };
+    } catch (error) {
+      console.error('Failed to get latest queued operation:', error.message);
+      return null;
+    }
+  }
+
+  async getUserOperationsSummary(userId) {
+    const [queued, anchored] = await Promise.all([
+      this.getUserPendingOperations(userId),
+      this.getUserAnchoredOperations(userId)
+    ]);
+    return { queued, anchored };
   }
 
   async getAllOperations() {

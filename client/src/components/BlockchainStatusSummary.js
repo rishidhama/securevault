@@ -6,6 +6,7 @@ const BlockchainStatusSummary = ({ userId }) => {
   const [status, setStatus] = useState(null);
   const [loading, setLoading] = useState(true);
   const [activityCount, setActivityCount] = useState(0);
+  const [pendingCount, setPendingCount] = useState(null);
 
   useEffect(() => {
     const fetchBlockchainStatus = async () => {
@@ -20,7 +21,7 @@ const BlockchainStatusSummary = ({ userId }) => {
         // Fetch blockchain status
         try {
           const statusRes = await blockchainAPI.status();
-          setStatus(statusRes);
+          setStatus(statusRes?.ethereum || null);
         } catch (error) {
           console.log('Blockchain status not available:', error.message);
           // Set a default status indicating blockchain is not available
@@ -38,6 +39,16 @@ const BlockchainStatusSummary = ({ userId }) => {
         } catch (error) {
           // Activity might not be available yet
           setActivityCount(0);
+        }
+
+        // Fetch batch queue pending count (if supported)
+        try {
+          const statsRes = await blockchainAPI.stats();
+          const list = statsRes?.data?.batchQueue?.stats?.pendingUsers || [];
+          const entry = list.find((u) => String(u.userId) === String(userId));
+          setPendingCount(entry ? (entry.pendingCount || 0) : 0);
+        } catch (error) {
+          setPendingCount(null);
         }
 
       } catch (error) {
@@ -70,7 +81,7 @@ const BlockchainStatusSummary = ({ userId }) => {
     return null;
   }
 
-  const isActive = status?.initialized && status?.connected;
+  const isActive = status?.enabled && status?.initialized;
   const hasActivity = activityCount > 0;
   const hasError = status?.error;
 
@@ -86,6 +97,11 @@ const BlockchainStatusSummary = ({ userId }) => {
             <p className="text-sm text-gray-600">
               {isActive ? 'Active' : hasError ? 'Service Unavailable' : 'Offline'} - {hasActivity ? `${activityCount} operations recorded` : 'No activity yet'}
             </p>
+            {typeof pendingCount === 'number' && pendingCount > 0 && (
+              <p className="text-xs text-blue-700 mt-1">
+                Batch queue pending: {pendingCount} update{pendingCount === 1 ? '' : 's'}
+              </p>
+            )}
             {hasError && (
               <p className="text-xs text-yellow-600 mt-1">
                 {hasError}

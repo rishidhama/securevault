@@ -26,7 +26,6 @@ const EMAILS = (process.env.BENCH_EMAILS || '').trim()
 
 const READ_REQUESTS = parseInt(process.env.BENCH_READS || '50', 10);
 const WRITE_REQUESTS = parseInt(process.env.BENCH_WRITES || '10', 10);
-const CONCURRENCY = parseInt(process.env.BENCH_CONCURRENCY || '10', 10); // Number of users to process in parallel
 
 function deriveAuthSecret(email, masterKey) {
   const normalizedEmail = String(email || '').trim().toLowerCase();
@@ -101,25 +100,6 @@ async function getCredentials(token) {
   return json.data || [];
 }
 
-async function getCredentialCount(token) {
-  // Use getAll=true to get accurate total count (bypasses pagination)
-  const res = await fetch(`${BASE_URL}/api/credentials?getAll=true`, {
-    method: 'GET',
-    headers: { Authorization: `Bearer ${token}` }
-  });
-  if (!res.ok) {
-    const text = await res.text();
-    throw new Error(`GET /api/credentials failed: ${res.status} ${res.statusText} - ${text}`);
-  }
-  const json = await res.json();
-  // Use pagination.total if available, otherwise fall back to array length
-  if (json.pagination && typeof json.pagination.total === 'number') {
-    return json.pagination.total;
-  }
-  const list = json.data || [];
-  return list.length;
-}
-
 function randomString(len) {
   const chars = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
   let out = '';
@@ -166,7 +146,8 @@ async function benchmarkUser(email) {
     const { token } = await login(email, MASTER_KEY);
 
     // Check if user has credentials (for read benchmarks)
-    const credCount = await getCredentialCount(token);
+    const creds = await getCredentials(token);
+    const credCount = Array.isArray(creds) ? creds.length : 0;
     
     if (credCount === 0) {
       console.log(`\n⚠️  WARNING: User ${email} has no credentials. Read benchmarks will be empty.`);
@@ -177,21 +158,7 @@ async function benchmarkUser(email) {
     }
 
     console.log(`\n=== Benchmarking reads for ${email} (${READ_REQUESTS}x GET /api/credentials) ===`);
-    // First request uses getAll=true to test full dataset fetch
-    try {
-      const fullRes = await fetch(`${BASE_URL}/api/credentials?getAll=true`, {
-        method: 'GET',
-        headers: { Authorization: `Bearer ${token}` }
-      });
-      if (fullRes.ok) {
-        await fullRes.json();
-      }
-    } catch (err) {
-      console.error(`Full dataset read error [${email}]:`, err.message);
-    }
-    
-    // Remaining requests use paginated (default)
-    for (let i = 1; i < READ_REQUESTS; i += 1) {
+    for (let i = 0; i < READ_REQUESTS; i += 1) {
       try {
         // eslint-disable-next-line no-await-in-loop
         await getCredentials(token);
@@ -223,79 +190,16 @@ async function benchmarkUser(email) {
 }
 
 async function main() {
-  const testMode = process.env.BENCH_MODE || 'both'; // 'individual', 'batch', or 'both'
-  
   console.log(`Starting backend/blockchain benchmarks against ${BASE_URL}`);
   console.log(`Using benchmark users: ${EMAILS.join(', ')}`);
-  console.log(`Test mode: ${testMode}\n`);
 
-  if (testMode === 'individual' || testMode === 'both') {
-    console.log('='.repeat(60));
-    console.log('PHASE 1: Individual/Per-Update Blockchain Anchoring');
-    console.log('='.repeat(60));
-    console.log('(Each credential update triggers its own transaction)');
-    console.log('\n⚠️  IMPORTANT: Start server with BATCH_ENABLED=false (or not set)');
-    console.log('   Command: $env:ETHEREUM_ENABLED="true"; $env:BATCH_ENABLED="false"; node .\\server\\index.js >> server.log 2>&1');
-    console.log('   (Note: Using >> to APPEND, not > to overwrite)\n');
-    
-    // Note: BATCH_ENABLED should be false or not set for individual mode
-    // This is controlled server-side, so we just run the benchmark
-    // The server will use individual mode if BATCH_ENABLED !== 'true'
-    
-    for (const email of EMAILS) {
-      // eslint-disable-next-line no-await-in-loop
-      await benchmarkUser(email);
-    }
-    
-    console.log('\n✓ Individual anchoring benchmark completed.');
-    console.log('\n⚠️  NEXT STEP: Restart server with BATCH_ENABLED=true');
-    console.log('   Command: $env:ETHEREUM_ENABLED="true"; $env:BATCH_ENABLED="true"; node .\\server\\index.js >> server.log 2>&1');
-    console.log('   (Using >> to APPEND to existing log, preserving Phase 1 results)');
-    console.log('   Then run: $env:BENCH_MODE="batch"; node bench_backend.js\n');
-    
-    if (testMode === 'both') {
-      console.log('Waiting 5 seconds before exiting (server restart required)...\n');
-      await new Promise(resolve => setTimeout(resolve, 5000));
-      return; // Exit - user needs to restart server
-    }
+  for (const email of EMAILS) {
+    // eslint-disable-next-line no-await-in-loop
+    await benchmarkUser(email);
   }
 
-  if (testMode === 'batch' || testMode === 'both') {
-    console.log('='.repeat(60));
-    console.log('PHASE 2: Batch Blockchain Anchoring');
-    console.log('='.repeat(60));
-    console.log('(Multiple credential updates batched into single transactions)');
-    console.log('\n⚠️  IMPORTANT: Server should be running with BATCH_ENABLED=true');
-    console.log('   Command: $env:ETHEREUM_ENABLED="true"; $env:BATCH_ENABLED="true"; node .\\server\\index.js >> server.log 2>&1');
-    console.log(`\n📊 Processing ${EMAILS.length} users with concurrency=${CONCURRENCY} (users will write concurrently to enable batching)\n`);
-    
-    // Wait a bit to ensure clean separation in logs
-    await new Promise(resolve => setTimeout(resolve, 2000));
-    
-    // Process users in concurrent batches to allow writes to overlap
-    // This enables the batch queue to see multiple users with pending updates simultaneously
-    async function processInBatches(items, fn, batchSize) {
-      for (let i = 0; i < items.length; i += batchSize) {
-        const batch = items.slice(i, i + batchSize);
-        console.log(`\n🔄 Processing batch ${Math.floor(i / batchSize) + 1} (${batch.length} users concurrently)...`);
-        await Promise.all(batch.map(email => fn(email)));
-      }
-    }
-    
-    await processInBatches(EMAILS, benchmarkUser, CONCURRENCY);
-    
-    console.log('\n✓ Batch anchoring benchmark completed.');
-    console.log('\n💡 Tip: Larger batch sizes form when multiple users write concurrently.');
-    console.log(`   With ${EMAILS.length} users and concurrency=${CONCURRENCY}, you should see batch sizes up to ${Math.min(CONCURRENCY, EMAILS.length)}.`);
-  }
-
-  console.log('\n' + '='.repeat(60));
-  console.log('Backend/blockchain benchmark runs completed.');
-  console.log('='.repeat(60));
+  console.log('\nBackend/blockchain benchmark runs completed.');
   console.log('Check server.log and run: node analyze-bench.js <securevault-bench.json> server.log');
-  console.log('\nThe analyzer will show separate metrics for:');
-  console.log('  - Individual transactions (batch: false or missing)');
-  console.log('  - Batch transactions (batch: true)');
 }
 
 main().catch((err) => {

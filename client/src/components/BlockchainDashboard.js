@@ -48,8 +48,9 @@ const BlockchainDashboard = ({ userId }) => {
       
       if (userId) {
         try {
-          const historyRes = await blockchainAPI.history(userId);
-          setTransactions(historyRes.data || []);
+          const opsRes = await blockchainAPI.operations(userId);
+          const anchored = opsRes?.data?.anchored || [];
+          setTransactions(anchored);
         } catch (error) {
           console.log('No transaction history available yet');
           setTransactions([]);
@@ -215,7 +216,7 @@ const BlockchainDashboard = ({ userId }) => {
         {networkInfo.contractAddress && (
           <div className="mt-4 pt-4 border-t border-secondary-200">
             <a
-              href={`https://sepolia.etherscan.io/address/${networkInfo.contractAddress}`}
+              href={`https://sepolia.arbiscan.io/address/${networkInfo.contractAddress}`}
               target="_blank"
               rel="noopener noreferrer"
               className="inline-flex items-center gap-2 text-primary-600 hover:text-primary-700"
@@ -261,7 +262,7 @@ const BlockchainDashboard = ({ userId }) => {
                     {tx.txHash.slice(0, 12)}...{tx.txHash.slice(-8)}
                   </div>
                   <a
-                    href={`https://sepolia.etherscan.io/tx/${tx.txHash}`}
+                    href={tx.etherscanUrl || `https://sepolia.arbiscan.io/tx/${tx.txHash}`}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="text-primary-600 hover:text-primary-700"

@@ -103,7 +103,8 @@ userSchema.methods.validateMasterKey = async function(masterKey) {
     throw new Error('Master key is too weak');
   }
   
-  const serverSalt = process.env.SERVER_SALT || 'securevault-server-salt-2024';
+  // Must match the salt used in the pre-save hook when hashing masterKeyHash.
+  const serverSalt = process.env.SERVER_SALT || 'securevault-server-salt-2025';
   const saltedKey = masterKey + serverSalt;
   return await bcrypt.compare(saltedKey, this.masterKeyHash);
 };

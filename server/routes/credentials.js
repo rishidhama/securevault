@@ -11,7 +11,7 @@ const batchQueue = require('../services/batch-queue');
 const createBlockchainEvent = async (userId, action, credentialId, credentialData = null) => {
   try {
     if (!process.env.ETHEREUM_ENABLED || process.env.ETHEREUM_ENABLED !== 'true') {
-      return;
+      return { enabled: false, queued: false, txHash: null };
     }
 
     const credentialMeta = credentialData ? {
@@ -43,11 +43,26 @@ const createBlockchainEvent = async (userId, action, credentialId, credentialDat
       throw new Error('Generated vault hash is empty');
     }
 
+    // Persist as queued immediately so UI can show "Queued" even in batch mode.
+    const pendingDoc = await blockchainDecoder.storePendingOperation({
+      userId,
+      action,
+      credentialId,
+      vaultData,
+      vaultHash,
+      credentialData: credentialMeta
+    });
+
     // Use batch queue if enabled, otherwise immediate update
     const useBatch = process.env.BATCH_ENABLED === 'true';
-    const result = useBatch 
+    const result = useBatch
       ? await batchQueue.queueUpdate(userId, vaultHash)
       : await ethereumService.storeVaultHash(userId, vaultHash);
+
+    // If blockchain service is disabled/unavailable, avoid leaving stale queued records forever.
+    if (result?.reason === 'blockchain_disabled') {
+      await blockchainDecoder.markSupersededByHash(userId, vaultHash);
+    }
     
     if (result.success && result.txHash) {
       await blockchainDecoder.storeOperationDetails(result.txHash, {
@@ -59,6 +74,7 @@ const createBlockchainEvent = async (userId, action, credentialId, credentialDat
         blockNumber: result.blockNumber,
         credentialData: credentialMeta
       });
+      await blockchainDecoder.markAnchoredForUser(userId, { txHash: result.txHash, blockNumber: result.blockNumber, vaultHash });
     }
     
     console.log(`Blockchain event logged: ${action} credential ${credentialId}`, {
@@ -68,8 +84,19 @@ const createBlockchainEvent = async (userId, action, credentialId, credentialDat
       etherscanUrl: result.etherscanUrl || null,
       vaultHash: vaultHash
     });
+
+    return {
+      enabled: true,
+      queued: !!result.queued,
+      pendingCount: typeof result.pendingCount === 'number' ? result.pendingCount : null,
+      txHash: result.txHash || null,
+      etherscanUrl: result.etherscanUrl || null,
+      vaultHash,
+      pendingOperationId: pendingDoc ? pendingDoc._id?.toString?.() : null
+    };
   } catch (error) {
     console.error(`Blockchain event failed for ${action} credential ${credentialId}:`, error.message);
+    return { enabled: true, queued: false, txHash: null, error: error.message };
   }
 };
 
@@ -93,7 +120,7 @@ const validateCredential = [
     .isLength({ min: 1, max: 100 })
     .withMessage('Salt is required and must be less than 100 characters'),
   body('url')
-    .optional()
+    .optional({ checkFalsy: true })
     .isURL()
     .withMessage('URL must be a valid URL'),
   body('notes')
@@ -143,7 +170,7 @@ const validatePartialUpdate = [
     .isLength({ min: 1, max: 100 })
     .withMessage('Salt must be less than 100 characters'),
   body('url')
-    .optional()
+    .optional({ checkFalsy: true })
     .isURL()
     .withMessage('URL must be a valid URL'),
   body('notes')
@@ -295,12 +322,13 @@ router.post('/', authenticateToken, validateCredential, async (req, res) => {
     
     await credential.save();
     
-    createBlockchainEvent(req.user.userId, 'CREATE', credential._id.toString(), credential);
+    const blockchain = await createBlockchainEvent(req.user.userId, 'CREATE', credential._id.toString(), credential);
     
     res.status(201).json({
       success: true,
       message: 'Credential saved successfully',
-      data: credential
+      data: credential,
+      blockchain
     });
   } catch (error) {
     console.error('Error creating credential:', error);
@@ -329,12 +357,13 @@ router.put('/:id', authenticateToken, validatePartialUpdate, async (req, res) =>
       return res.status(404).json({ success: false, error: 'Credential not found' });
     }
     
-    createBlockchainEvent(req.user.userId, 'UPDATE', credential._id.toString(), credential);
+    const blockchain = await createBlockchainEvent(req.user.userId, 'UPDATE', credential._id.toString(), credential);
     
     res.json({
       success: true,
       message: 'Credential updated successfully',
-      data: credential
+      data: credential,
+      blockchain
     });
   } catch (error) {
     console.error('Error updating credential:', error);
@@ -364,9 +393,9 @@ router.delete('/:id', authenticateToken, async (req, res) => {
       return res.status(404).json({ success: false, error: 'Credential not found' });
     }
     
-    createBlockchainEvent(req.user.userId, 'DELETE', credential._id.toString(), credential);
+    const blockchain = await createBlockchainEvent(req.user.userId, 'DELETE', credential._id.toString(), credential);
     
-    res.json({ success: true, message: 'Credential deleted successfully' });
+    res.json({ success: true, message: 'Credential deleted successfully', blockchain });
   } catch (error) {
     console.error('Error deleting credential:', error);
     res.status(500).json({ success: false, error: 'Failed to delete credential' });

@@ -17,7 +17,8 @@ import {
 import { toast } from 'react-hot-toast';
 
 const BlockchainActivityLog = ({ userId }) => {
-  const [activities, setActivities] = useState([]);
+  const [anchored, setAnchored] = useState([]);
+  const [queued, setQueued] = useState([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
@@ -35,11 +36,14 @@ const BlockchainActivityLog = ({ userId }) => {
       
       if (userId) {
         try {
-          const activityRes = await blockchainAPI.activity(userId);
-          setActivities(activityRes.data || []);
+          const opsRes = await blockchainAPI.operations(userId);
+          const data = opsRes.data || opsRes;
+          setQueued(data.queued || []);
+          setAnchored(data.anchored || []);
         } catch (error) {
           console.log('No blockchain activity available yet');
-          setActivities([]);
+          setQueued([]);
+          setAnchored([]);
         }
       }
       
@@ -119,8 +123,46 @@ const BlockchainActivityLog = ({ userId }) => {
         </button>
       </div>
 
-      {/* Activity List */}
-      {activities.length === 0 ? (
+      {/* Queued */}
+      {queued.length > 0 && (
+        <div className="bg-white border border-secondary-200 rounded-lg p-4">
+          <h4 className="text-sm font-semibold text-secondary-800 mb-3">Queued (pending anchoring)</h4>
+          <div className="space-y-2">
+            {queued.map((q, idx) => {
+              const ActionIcon = getActionIcon(q.action);
+              const actionColor = getActionColor(q.action);
+              const actionBgColor = getActionBgColor(q.action);
+              return (
+                <div key={idx} className="flex items-start gap-3 border border-secondary-100 rounded-lg p-3">
+                  <div className={`p-2 rounded-lg ${actionBgColor}`}>
+                    <ActionIcon className={`w-4 h-4 ${actionColor}`} />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2">
+                      <div className="text-sm font-medium text-secondary-800 truncate">
+                        {q.title || 'Credential Operation'}
+                      </div>
+                      <span className={`text-xs px-2 py-0.5 rounded-full ${actionBgColor} ${actionColor}`}>
+                        {q.action}
+                      </span>
+                    </div>
+                    <div className="text-xs text-secondary-600 mt-1">
+                      {q.category ? `Category: ${q.category}` : null}
+                      {q.createdAt ? ` • ${new Date(q.createdAt).toLocaleString()}` : null}
+                    </div>
+                    <div className="text-[11px] text-secondary-400 font-mono mt-1 break-all">
+                      {q.vaultHash}
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* Anchored Activity List */}
+      {anchored.length === 0 && queued.length === 0 ? (
         <div className="bg-white border border-secondary-200 rounded-lg p-8 text-center">
           <Activity className="w-12 h-12 text-secondary-400 mx-auto mb-4" />
           <h4 className="text-lg font-medium text-secondary-700 mb-2">No Blockchain Activity Yet</h4>
@@ -133,7 +175,7 @@ const BlockchainActivityLog = ({ userId }) => {
         </div>
       ) : (
         <div className="space-y-3">
-          {activities.map((activity, index) => {
+          {anchored.map((activity, index) => {
             const ActionIcon = getActionIcon(activity.action);
             const actionColor = getActionColor(activity.action);
             const actionBgColor = getActionBgColor(activity.action);
@@ -184,7 +226,7 @@ const BlockchainActivityLog = ({ userId }) => {
                   
                   <div className="flex flex-col items-end gap-2">
                     <a
-                      href={`https://sepolia.etherscan.io/tx/${activity.txHash}`}
+                      href={activity.etherscanUrl || `https://sepolia.arbiscan.io/tx/${activity.txHash}`}
                       target="_blank"
                       rel="noopener noreferrer"
                       className="text-primary-600 hover:text-primary-700"

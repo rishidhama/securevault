@@ -17,18 +17,6 @@ function p95(arr) {
 }
 
 function analyzeClient(clientPath) {
-  if (!clientPath || clientPath === 'none' || clientPath === 'null') {
-    console.log('=== Client-side crypto ===');
-    console.log('(Skipped - no client benchmark file provided)');
-    return;
-  }
-  
-  if (!fs.existsSync(clientPath)) {
-    console.log('=== Client-side crypto ===');
-    console.log(`(Skipped - file not found: ${clientPath})`);
-    return;
-  }
-  
   const raw = fs.readFileSync(clientPath, 'utf8');
   const data = JSON.parse(raw);
 
@@ -308,13 +296,6 @@ function analyzeAnchor(serverPath) {
   const gasUsed = [];
   let anchorCount = 0;
 
-  const failedAnchors = [];
-  const individualLatencies = [];
-  const individualGasUsed = [];
-  
-  // Group batch transactions by batch size (itemsUpdated)
-  const batchBySize = {}; // { batchSize: { latencies: [], gasUsed: [], itemsUpdated: [] } }
-  
   lines.forEach((line) => {
     const trimmed = line.trim();
     if (!trimmed.startsWith('{')) return;
@@ -326,211 +307,42 @@ function analyzeAnchor(serverPath) {
     }
     if (d.op !== 'anchor') return;
     anchorCount++;
-    
-    // Track failed transactions separately
-    if (d.success === false) {
-      failedAnchors.push(d);
-      return; // Don't include failed transactions in success metrics
-    }
-    
-    // Separate batch vs individual transactions
-    const isBatch = d.batch === true;
-    const itemsUpdated = isBatch && typeof d.itemsUpdated === 'number' ? d.itemsUpdated : 1;
-    
-    // Only count successful transactions for metrics
     if (typeof d.latencyMs === 'number') {
-      if (isBatch) {
-        // Group by batch size
-        if (!batchBySize[itemsUpdated]) {
-          batchBySize[itemsUpdated] = { latencies: [], gasUsed: [], itemsUpdated: [] };
-        }
-        batchBySize[itemsUpdated].latencies.push(d.latencyMs);
-        batchBySize[itemsUpdated].itemsUpdated.push(itemsUpdated);
-      } else {
-        individualLatencies.push(d.latencyMs);
-      }
-      latencies.push(d.latencyMs); // Also keep combined for overall stats
+      latencies.push(d.latencyMs);
     }
     if (typeof d.gasUsed === 'string') {
       const g = parseInt(d.gasUsed, 10);
-      if (!Number.isNaN(g)) {
-        if (isBatch) {
-          if (!batchBySize[itemsUpdated]) {
-            batchBySize[itemsUpdated] = { latencies: [], gasUsed: [], itemsUpdated: [] };
-          }
-          batchBySize[itemsUpdated].gasUsed.push(g);
-        } else {
-          individualGasUsed.push(g);
-        }
-        gasUsed.push(g); // Also keep combined for overall stats
-      }
+      if (!Number.isNaN(g)) gasUsed.push(g);
     }
   });
 
   console.log('\n=== Blockchain anchoring ===');
-  if (anchorCount === 0) {
-    console.log('No anchor entries found in server log.');
+  if (latencies.length) {
+    console.log(
+      'Anchoring latency ms: median =',
+      median(latencies).toFixed(2),
+      'p95 =',
+      p95(latencies).toFixed(2),
+    );
   } else {
-    const successfulCount = latencies.length;
-    const totalBatchTransactions = Object.values(batchBySize).reduce((sum, group) => sum + group.latencies.length, 0);
-    console.log(`Total anchor operations: ${anchorCount} (${successfulCount} successful, ${failedAnchors.length} failed)`);
-    console.log(`  - Individual transactions: ${individualLatencies.length}`);
-    console.log(`  - Batch transactions: ${totalBatchTransactions}`);
-    
-    // Individual transaction metrics
-    if (individualLatencies.length > 0) {
-      console.log('\n' + '─'.repeat(70));
-      console.log('Individual/Per-Update Anchoring:');
-      console.log('─'.repeat(70));
-      const indMedianLatency = median(individualLatencies);
-      const indP95Latency = p95(individualLatencies);
-      console.log(`  Transaction latency: median = ${indMedianLatency.toFixed(2)} ms, p95 = ${indP95Latency.toFixed(2)} ms`);
-      
-      if (individualGasUsed.length > 0) {
-        const indAvgGas = individualGasUsed.reduce((a, b) => a + b, 0) / individualGasUsed.length;
-        const indMedianGas = median(individualGasUsed);
-        console.log(`  Gas per transaction: avg = ${indAvgGas.toFixed(2)}, median = ${indMedianGas.toFixed(2)}`);
-        console.log(`  Gas per update: ${indAvgGas.toFixed(2)} (1 update per transaction)`);
-        console.log(`  Amortized latency per update: ${(indMedianLatency / 1).toFixed(2)} ms`);
-      }
-    }
-    
-    // Batch transaction metrics by size (automatically detected)
-    const batchSizes = Object.keys(batchBySize).map(Number).sort((a, b) => a - b);
-    if (batchSizes.length > 0) {
-      console.log('\n' + '─'.repeat(90));
-      console.log('Batch Anchoring (by batch size - automatically detected):');
-      console.log('─'.repeat(90));
-      console.log('Batch | Tx Latency (ms)      | Gas/Tx          | Gas/Update        | Amortized Latency/Update (ms)');
-      console.log('Size  | median      p95      | median    p95   | median      p95   | median            p95');
-      console.log('─'.repeat(90));
-      
-      batchSizes.forEach(size => {
-        const group = batchBySize[size];
-        if (group.latencies.length === 0) return;
-        
-        const medianLatency = median(group.latencies);
-        const p95Latency = p95(group.latencies);
-        
-        let medianGas = 0, p95Gas = 0, avgGas = 0;
-        if (group.gasUsed.length > 0) {
-          medianGas = median(group.gasUsed);
-          p95Gas = p95(group.gasUsed);
-          avgGas = group.gasUsed.reduce((a, b) => a + b, 0) / group.gasUsed.length;
-        }
-        
-        const gasPerUpdateMedian = medianGas / size;
-        const gasPerUpdateP95 = p95Gas / size;
-        const amortizedLatencyMedian = medianLatency / size;
-        const amortizedLatencyP95 = p95Latency / size;
-        
-        console.log(
-          `  ${String(size).padStart(3)} | ` +
-          `${medianLatency.toFixed(2).padStart(7)} ${p95Latency.toFixed(2).padStart(7)} | ` +
-          `${medianGas.toFixed(0).padStart(6)} ${p95Gas.toFixed(0).padStart(6)} | ` +
-          `${gasPerUpdateMedian.toFixed(2).padStart(7)} ${gasPerUpdateP95.toFixed(2).padStart(7)} | ` +
-          `${amortizedLatencyMedian.toFixed(2).padStart(7)} ${amortizedLatencyP95.toFixed(2).padStart(7)}`
-        );
-      });
-    }
-    
-    // Comparison table showing improvements (with median and p95)
-    if (individualLatencies.length > 0 && batchSizes.length > 0) {
-      const indMedianGas = individualGasUsed.length > 0 ? median(individualGasUsed) : 0;
-      const indP95Gas = individualGasUsed.length > 0 ? p95(individualGasUsed) : 0;
-      const indMedianLatency = median(individualLatencies);
-      const indP95Latency = p95(individualLatencies);
-      
-      console.log('\n' + '─'.repeat(100));
-      console.log('Batching Efficiency Analysis (vs Individual):');
-      console.log('─'.repeat(100));
-      console.log('Batch | Gas Savings (%)        | Amortized Latency Improvement (%)');
-      console.log('Size  | median      p95         | median            p95');
-      console.log('─'.repeat(100));
-      console.log(`Indiv  |     0.00      0.00     |        0.00           0.00 (baseline)`);
-      
-      batchSizes.forEach(size => {
-        const group = batchBySize[size];
-        if (group.latencies.length === 0 || group.gasUsed.length === 0) return;
-        
-        const medianLatency = median(group.latencies);
-        const p95Latency = p95(group.latencies);
-        const medianGas = median(group.gasUsed);
-        const p95Gas = p95(group.gasUsed);
-        
-        const gasPerUpdateMedian = medianGas / size;
-        const gasPerUpdateP95 = p95Gas / size;
-        const amortizedLatencyMedian = medianLatency / size;
-        const amortizedLatencyP95 = p95Latency / size;
-        
-        const gasSavingsMedian = indMedianGas > 0 ? ((indMedianGas - gasPerUpdateMedian) / indMedianGas * 100) : 0;
-        const gasSavingsP95 = indP95Gas > 0 ? ((indP95Gas - gasPerUpdateP95) / indP95Gas * 100) : 0;
-        const amortizedImprovementMedian = indMedianLatency > 0 ? ((indMedianLatency - amortizedLatencyMedian) / indMedianLatency * 100) : 0;
-        const amortizedImprovementP95 = indP95Latency > 0 ? ((indP95Latency - amortizedLatencyP95) / indP95Latency * 100) : 0;
-        
-        console.log(
-          `  ${String(size).padStart(3)} | ` +
-          `${gasSavingsMedian.toFixed(2).padStart(7)} ${gasSavingsP95.toFixed(2).padStart(7)}     | ` +
-          `${amortizedImprovementMedian.toFixed(2).padStart(7)} ${amortizedImprovementP95.toFixed(2).padStart(7)}`
-        );
-      });
-      
-      // Summary insights with both median and p95
-      if (batchSizes.length > 0) {
-        const largestBatch = Math.max(...batchSizes);
-        const largestGroup = batchBySize[largestBatch];
-        if (largestGroup.latencies.length > 0 && largestGroup.gasUsed.length > 0) {
-          const largestMedianGas = median(largestGroup.gasUsed);
-          const largestP95Gas = p95(largestGroup.gasUsed);
-          const largestMedianLatency = median(largestGroup.latencies);
-          const largestP95Latency = p95(largestGroup.latencies);
-          const largestGasPerUpdateMedian = largestMedianGas / largestBatch;
-          const largestGasPerUpdateP95 = largestP95Gas / largestBatch;
-          const largestAmortizedLatencyMedian = largestMedianLatency / largestBatch;
-          const largestAmortizedLatencyP95 = largestP95Latency / largestBatch;
-          
-          console.log('\n' + '─'.repeat(100));
-          console.log('Key Insights (Largest Batch Size):');
-          console.log('─'.repeat(100));
-          if (indMedianGas > 0) {
-            const maxGasSavingsMedian = ((indMedianGas - largestGasPerUpdateMedian) / indMedianGas * 100).toFixed(1);
-            const maxGasSavingsP95 = ((indP95Gas - largestGasPerUpdateP95) / indP95Gas * 100).toFixed(1);
-            console.log(`• Batch size ${largestBatch} reduces gas cost per update:`);
-            console.log(`  Median: ${maxGasSavingsMedian}% (${indMedianGas.toFixed(0)} → ${largestGasPerUpdateMedian.toFixed(0)} gas)`);
-            console.log(`  P95:    ${maxGasSavingsP95}% (${indP95Gas.toFixed(0)} → ${largestGasPerUpdateP95.toFixed(0)} gas)`);
-          }
-          if (indMedianLatency > 0) {
-            const maxAmortizedImprovementMedian = ((indMedianLatency - largestAmortizedLatencyMedian) / indMedianLatency * 100).toFixed(1);
-            const maxAmortizedImprovementP95 = ((indP95Latency - largestAmortizedLatencyP95) / indP95Latency * 100).toFixed(1);
-            console.log(`• Batch size ${largestBatch} improves amortized latency per update:`);
-            console.log(`  Median: ${maxAmortizedImprovementMedian}% (${(indMedianLatency / 1000).toFixed(2)}s → ${(largestAmortizedLatencyMedian / 1000).toFixed(2)}s)`);
-            console.log(`  P95:    ${maxAmortizedImprovementP95}% (${(indP95Latency / 1000).toFixed(2)}s → ${(largestAmortizedLatencyP95 / 1000).toFixed(2)}s)`);
-            console.log(`  Transaction latency: ${(largestMedianLatency / 1000).toFixed(2)}s (median), ${(largestP95Latency / 1000).toFixed(2)}s (p95) for ${largestBatch} updates`);
-          }
-        }
-      }
-    }
-    
-    if (failedAnchors.length > 0) {
-      console.log(`\n⚠️  Warning: ${failedAnchors.length} transactions reverted. Check contract or parameters.`);
-    }
+    console.log('No anchor entries found in server log.');
+  }
+  if (gasUsed.length) {
+    const avgGas = gasUsed.reduce((a, b) => a + b, 0) / gasUsed.length;
+    console.log('Average gas used =', avgGas.toFixed(0));
+  } else {
+    console.log('No gasUsed values found for anchor entries.');
   }
 }
 
-if (process.argv.length < 3) {
+if (process.argv.length < 4) {
   // eslint-disable-next-line no-console
-  console.error('Usage: node analyze-bench.js [securevault-bench-client.json|none] <server.log>');
-  console.error('  For blockchain-only analysis: node analyze-bench.js none server.log');
+  console.error('Usage: node analyze-bench.js <securevault-bench-client.json> <server.log>');
   process.exit(1);
 }
 
-const clientPath = process.argv[2] || 'none';
-const serverPath = process.argv[3] || process.argv[2]; // If only one arg, assume it's server.log
-
-if (!serverPath || serverPath === 'none') {
-  console.error('Error: server.log path is required');
-  process.exit(1);
-}
+const clientPath = process.argv[2];
+const serverPath = process.argv[3];
 
 analyzeClient(clientPath);
 analyzeServer(serverPath);

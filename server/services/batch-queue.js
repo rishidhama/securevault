@@ -6,6 +6,7 @@
  */
 
 const ethereumService = require('./ethereum-service');
+const blockchainDecoder = require('./blockchain-decoder-persistent');
 
 class BatchQueue {
   constructor() {
@@ -65,10 +66,7 @@ class BatchQueue {
     if (changed) this.stats.totalChanged++;
 
     const state = this.pending.get(userId);
-    // Don't flush immediately on maxUpdates - let the timer batch multiple users together
-    // Only trigger flush if we're way over the limit (safety check)
-    if (state && state.pendingCount > this.maxUpdates * 2) {
-      // Safety: if a user has way too many pending updates, flush to prevent memory issues
+    if (state && state.pendingCount >= this.maxUpdates) {
       await this.flushDueUsers({ forceUserId: userId });
     }
 
@@ -101,9 +99,7 @@ class BatchQueue {
     if (dueStates.length === 0) return { success: true, flushed: 0, mode: 'noop' };
 
     dueStates.sort((a, b) => (a.firstPendingAt || 0) - (b.firstPendingAt || 0));
-    // Batch up to maxUpdates users together (not maxUpdates updates per user)
-    // This allows multiple users to be batched in a single transaction
-    const slice = dueStates.slice(0, Math.min(dueStates.length, this.maxUpdates));
+    const slice = dueStates.slice(0, Math.max(1, this.maxUpdates));
 
     if (contractVersion === 'l2' && slice.length > 1) {
       const updates = slice.map(s => ({ userId: s.userId, vaultHash: s.latestVaultHash }));
@@ -111,7 +107,19 @@ class BatchQueue {
         const result = await ethereumService.batchStoreVaultHash(updates);
         if (!result.success) throw new Error(result.error || 'Batch update failed');
 
-        for (const s of slice) this._markFlushed(s.userId);
+        for (const s of slice) {
+          this._markFlushed(s.userId);
+          if (result.txHash) {
+            // Mark persisted queued operations as anchored for UI visibility.
+            // Anchor only entries matching the hash we just wrote on-chain.
+            // eslint-disable-next-line no-await-in-loop
+            await blockchainDecoder.markAnchoredForUser(s.userId, {
+              txHash: result.txHash,
+              blockNumber: result.blockNumber,
+              vaultHash: s.latestVaultHash
+            });
+          }
+        }
         this.stats.totalBatched += slice.length;
         console.log(`Batch update: ${slice.length} users, tx: ${result.txHash}`);
         return { success: true, flushed: slice.length, mode: 'batch', txHash: result.txHash };
@@ -142,6 +150,13 @@ class BatchQueue {
         if (r && r.success) {
           this.stats.totalIndividual += 1;
           this._markFlushed(s.userId);
+          if (r.txHash) {
+            await blockchainDecoder.markAnchoredForUser(s.userId, {
+              txHash: r.txHash,
+              blockNumber: r.blockNumber,
+              vaultHash: s.latestVaultHash
+            });
+          }
         } else {
           this.stats.totalFailed += 1;
         }
@@ -162,6 +177,13 @@ class BatchQueue {
       if (r && r.success) {
         this.stats.totalIndividual += 1;
         this._markFlushed(userId);
+        if (r.txHash) {
+          await blockchainDecoder.markAnchoredForUser(userId, {
+            txHash: r.txHash,
+            blockNumber: r.blockNumber,
+            vaultHash: s.latestVaultHash
+          });
+        }
       } else {
         this.stats.totalFailed += 1;
       }

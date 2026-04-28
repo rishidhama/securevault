@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate, useLocation, Link } from 'react-router-dom';
-import { Toaster } from 'react-hot-toast';
+import { Toaster, toast } from 'react-hot-toast';
 import { Shield, Lock, LogOut } from 'lucide-react';
 
 import Dashboard from './components/Dashboard';
@@ -62,6 +62,9 @@ function App() {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('all');
   const [showFavorites, setShowFavorites] = useState(false);
+  const [pendingAnchorCount, setPendingAnchorCount] = useState(0);
+  const [showAnchorResumeModal, setShowAnchorResumeModal] = useState(false);
+  const [isAnchoringQueued, setIsAnchoringQueued] = useState(false);
   const [merkleTree] = useState(() => new IncrementalMerkleTree());
 
   useEffect(() => {
@@ -171,6 +174,48 @@ function App() {
     setUser(null);
     setMasterKey('');
     setIsAuthenticated(false);
+    setPendingAnchorCount(0);
+    setShowAnchorResumeModal(false);
+  };
+
+  const getCurrentUserId = (u) => (u?.id || u?._id || null);
+
+  const checkPendingAnchors = async (u) => {
+    const userId = getCurrentUserId(u);
+    if (!userId) return;
+    try {
+      const res = await blockchainAPI.operations(userId);
+      const queued = res?.data?.queued || [];
+      const count = Array.isArray(queued) ? queued.length : 0;
+      setPendingAnchorCount(count);
+      setShowAnchorResumeModal(count > 0);
+    } catch {
+      // Non-blocking: if blockchain endpoint fails, skip modal.
+      setPendingAnchorCount(0);
+      setShowAnchorResumeModal(false);
+    }
+  };
+
+  const handleAnchorQueuedNow = async () => {
+    try {
+      setIsAnchoringQueued(true);
+      const res = await blockchainAPI.flushMyBatchQueue();
+      if (res?.data?.txHash) {
+        toast.success('Queued updates anchored successfully.');
+      } else if (res?.data?.flushed > 0) {
+        toast.success('Queued updates processed.');
+      } else {
+        toast('No queued updates to anchor right now.');
+      }
+      setShowAnchorResumeModal(false);
+      if (user) {
+        await checkPendingAnchors(user);
+      }
+    } catch (error) {
+      toast.error(`Failed to anchor queued updates: ${error.message || error}`);
+    } finally {
+      setIsAnchoringQueued(false);
+    }
   };
 
   useEffect(() => {
@@ -178,6 +223,19 @@ function App() {
       loadData();
     }
   }, [isAuthenticated]);
+
+  useEffect(() => {
+    if (isAuthenticated && user) {
+      checkPendingAnchors(user);
+    }
+  }, [isAuthenticated, user]);
+
+  // Keep decrypt cache warm whenever we have both masterKey + credentials.
+  // This prevents "Decryption not ready" during rerenders (e.g. toggling favorites).
+  useEffect(() => {
+    if (!masterKey || !Array.isArray(credentials) || credentials.length === 0) return;
+    encryptionService.warmDecryptCache(credentials, masterKey).catch(() => {});
+  }, [masterKey, credentials]);
 
   const loadData = async () => {
     try {
@@ -261,16 +319,19 @@ function App() {
           const fullUserData = { ...authData.user, ...profileResponse.data.user };
           setUser(fullUserData);
           localStorage.setItem('securevault_user', JSON.stringify(fullUserData));
+          await checkPendingAnchors(fullUserData);
         }
       } catch (error) {
         // If profile fetch fails or times out, continue with login data
         console.log('Profile fetch skipped (using login data):', error.message);
+        await checkPendingAnchors(authData.user);
       }
     } catch (error) {
       console.error('Login success handler error:', error);
       setUser(authData.user);
       setMasterKey(authData.masterKey || '');
       setIsAuthenticated(true);
+      await checkPendingAnchors(authData.user);
     }
   };
 
@@ -346,23 +407,18 @@ function App() {
 
       try { await encryptionService.warmDecryptCache([newCredentialData], masterKey); } catch (_) {}
 
+      // Anchoring source of truth is server-side credentials routes.
+      // Avoid duplicate client-side anchoring calls that create conflicting queue states.
       if (user?.id) {
-        (async () => {
-      try {
-            const credId = newCredentialData._id || newCredentialData.id;
-            const root = await merkleTree.addLeaf(credId, newCredentialData);
-            if (root) {
-              blockchainAPI.storeVault(user.id, { merkleRoot: root }).catch(err => {
-                console.log('Anchoring failed (non-blocking):', err?.message || err);
-              });
+        try {
+          const credId = newCredentialData._id || newCredentialData.id;
+          await merkleTree.addLeaf(credId, newCredentialData);
+        } catch (e) {
+          console.log('Merkle update skipped (non-blocking):', e?.message || e);
         }
-      } catch (e) {
-            console.log('Anchoring skipped (non-blocking):', e?.message || e);
-          }
-        })();
       }
       
-      return newCredentialData;
+      return { credential: newCredentialData, blockchain: response.blockchain || null };
     } catch (error) {
       throw error;
     }
@@ -375,18 +431,11 @@ function App() {
       setStats(prev => ({ ...prev, total: prev.total - 1 }));
 
       if (user?.id) {
-        (async () => {
-      try {
-            const root = await merkleTree.deleteLeaf(id);
-            if (root) {
-              blockchainAPI.storeVault(user.id, { merkleRoot: root }).catch(err => {
-                console.log('Anchoring failed (non-blocking):', err?.message || err);
-              });
+        try {
+          await merkleTree.deleteLeaf(id);
+        } catch (e) {
+          console.log('Merkle update skipped (non-blocking):', e?.message || e);
         }
-      } catch (e) {
-            console.log('Anchoring skipped (non-blocking):', e?.message || e);
-          }
-        })();
       }
     } catch (error) {
       throw error;
@@ -404,8 +453,8 @@ function App() {
         )
       );
       
-      const newStats = await credentialsAPI.getStats();
-      setStats(newStats.data);
+      const newStats = await credentialsAPI.stats();
+      setStats(newStats.data || newStats);
     } catch (error) {
       throw error;
     }
@@ -422,22 +471,15 @@ function App() {
       });
 
       if (user?.id) {
-        (async () => {
-      try {
-            const credId = id;
-            const updated = updatedCredential ? { ...updatedCredential, ...response.data } : response.data;
-            const root = await merkleTree.updateLeaf(credId, updated);
-            if (root) {
-              blockchainAPI.storeVault(user.id, { merkleRoot: root }).catch(err => {
-                console.log('Anchoring failed (non-blocking):', err?.message || err);
-              });
+        try {
+          const credId = id;
+          const updated = updatedCredential ? { ...updatedCredential, ...response.data } : response.data;
+          await merkleTree.updateLeaf(credId, updated);
+        } catch (e) {
+          console.log('Merkle update skipped (non-blocking):', e?.message || e);
         }
-      } catch (e) {
-            console.log('Anchoring skipped (non-blocking):', e?.message || e);
-          }
-        })();
       }
-      return response.data;
+      return { credential: response.data || response, blockchain: response.blockchain || null };
     } catch (error) {
       throw error;
     }
@@ -494,6 +536,35 @@ function App() {
   return (
     <Router>
       <div className="flex min-h-screen bg-secondary-50 flex-col">
+        {showAnchorResumeModal && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+            <div className="w-full max-w-md rounded-lg bg-white p-6 shadow-xl">
+              <h3 className="text-lg font-semibold text-secondary-900">Pending Batch Anchoring</h3>
+              <p className="mt-2 text-sm text-secondary-700">
+                You have {pendingAnchorCount} queued update{pendingAnchorCount === 1 ? '' : 's'} from a previous session.
+                Anchor them now?
+              </p>
+              <div className="mt-5 flex justify-end gap-2">
+                <button
+                  type="button"
+                  className="btn-secondary"
+                  onClick={() => setShowAnchorResumeModal(false)}
+                  disabled={isAnchoringQueued}
+                >
+                  Later
+                </button>
+                <button
+                  type="button"
+                  className="btn-primary"
+                  onClick={handleAnchorQueuedNow}
+                  disabled={isAnchoringQueued}
+                >
+                  {isAnchoringQueued ? 'Anchoring...' : 'Anchor now'}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
         <div className="flex flex-1 min-h-0">
           <Sidebar onLogout={handleLogout} />
           <main className="flex-1 p-4 sm:p-6 lg:p-8 overflow-y-auto pt-16 lg:pt-0">

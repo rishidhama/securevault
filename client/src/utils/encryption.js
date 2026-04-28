@@ -241,7 +241,7 @@ class VaultCrypt {
       }
     const cacheKey = `${encryptedPassword}|${iv}|${salt}`;
     if (!this._decryptCache.has(cacheKey)) {
-      throw new Error('Decryption not ready');
+      return '*** Decrypting... ***';
     }
     return this._decryptCache.get(cacheKey);
   }

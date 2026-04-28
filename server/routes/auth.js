@@ -172,8 +172,11 @@ router.post('/login', validateLogin, async (req, res) => {
 
       await user.resetLoginAttempts();
 
-      user.lastLogin = new Date();
-      await user.save();
+      // Avoid full document validation on login (some legacy user docs may be missing required fields).
+      // Only update lastLogin, and keep login working even if the document doesn't satisfy current schema.
+      const now = new Date();
+      await User.updateOne({ _id: user._id }, { $set: { lastLogin: now } });
+      user.lastLogin = now;
 
       const token = generateToken(user._id);
 

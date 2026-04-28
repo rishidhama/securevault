@@ -9,6 +9,21 @@ const crypto = require('crypto');
 
 ethereumService.init().catch(console.error);
 
+const requireSelfUser = (req, res, userId) => {
+  if (!req.user?.userId || String(req.user.userId) !== String(userId)) {
+    res.status(403).json({ success: false, error: 'Access denied for requested user scope' });
+    return false;
+  }
+  return true;
+};
+
+const getExplorerBase = async () => {
+  const network = await ethereumService.getNetworkInfo();
+  if (network?.chainId === 42161) return 'https://arbiscan.io';
+  if (network?.chainId === 421614) return 'https://sepolia.arbiscan.io';
+  return 'https://sepolia.etherscan.io';
+};
+
 router.get('/status', async (req, res) => {
   try {
     const networkInfo = await ethereumService.getNetworkInfo();
@@ -39,6 +54,7 @@ router.post('/store-vault', authenticateToken, async (req, res) => {
         error: 'Missing required fields: userId, (vaultData or merkleRoot)'
       });
     }
+    if (!requireSelfUser(req, res, userId)) return;
     
     const vaultHash = merkleRoot && typeof merkleRoot === 'string' && merkleRoot.length > 0
       ? merkleRoot
@@ -99,6 +115,7 @@ router.post('/store-vault', authenticateToken, async (req, res) => {
 router.get('/vault/:userId', authenticateToken, async (req, res) => {
   try {
     const { userId } = req.params;
+    if (!requireSelfUser(req, res, userId)) return;
     
     const vaultData = await ethereumService.getVaultHash(userId);
     
@@ -130,12 +147,14 @@ router.get('/vault/:userId', authenticateToken, async (req, res) => {
 router.get('/history/:userId', authenticateToken, async (req, res) => {
   try {
     const { userId } = req.params;
+    if (!requireSelfUser(req, res, userId)) return;
     
     if (mongoose.connection.readyState !== 1) {
       return res.json({ success: true, data: [] });
     }
     
     const history = await blockchainDecoder.getUserTransactionHistory(userId);
+    const explorerBase = await getExplorerBase();
     
     res.json({
       success: true,
@@ -143,7 +162,7 @@ router.get('/history/:userId', authenticateToken, async (req, res) => {
         txHash: tx.txHash,
         timestamp: tx.timestamp,
         blockNumber: tx.blockNumber || 0,
-        etherscanUrl: `https://sepolia.etherscan.io/tx/${tx.txHash}`
+        etherscanUrl: `${explorerBase}/tx/${tx.txHash}`
       }))
     });
     
@@ -158,12 +177,14 @@ router.get('/history/:userId', authenticateToken, async (req, res) => {
 router.get('/activity/:userId', authenticateToken, async (req, res) => {
   try {
     const { userId } = req.params;
+    if (!requireSelfUser(req, res, userId)) return;
     
     if (mongoose.connection.readyState !== 1) {
       return res.json({ success: true, data: [] });
     }
     
     const history = await blockchainDecoder.getUserTransactionHistory(userId);
+    const explorerBase = await getExplorerBase();
     
     const enhancedActivities = history.map(tx => {
       return {
@@ -175,7 +196,7 @@ router.get('/activity/:userId', authenticateToken, async (req, res) => {
         title: tx.credentialData?.title || 'Unknown',
         category: tx.credentialData?.category || 'Unknown',
         hasUrl: tx.credentialData?.hasUrl || false,
-        etherscanUrl: `https://sepolia.etherscan.io/tx/${tx.txHash}`,
+        etherscanUrl: `${explorerBase}/tx/${tx.txHash}`,
         vaultHash: tx.vaultHash
       };
     });
@@ -193,6 +214,27 @@ router.get('/activity/:userId', authenticateToken, async (req, res) => {
   }
 });
 
+// Combined operations endpoint: queued + anchored
+router.get('/operations/:userId', authenticateToken, async (req, res) => {
+  try {
+    const { userId } = req.params;
+    if (!requireSelfUser(req, res, userId)) return;
+    if (mongoose.connection.readyState !== 1) {
+      return res.json({ success: true, data: { queued: [], anchored: [] } });
+    }
+
+    const summary = await blockchainDecoder.getUserOperationsSummary(userId);
+    const explorerBase = await getExplorerBase();
+    const anchored = (summary.anchored || []).map((a) => ({
+      ...a,
+      etherscanUrl: a.txHash ? `${explorerBase}/tx/${a.txHash}` : null
+    }));
+    res.json({ success: true, data: { queued: summary.queued || [], anchored } });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
 router.post('/verify', authenticateToken, async (req, res) => {
   try {
     const { userId, vaultData, merkleRoot } = req.body;
@@ -203,6 +245,7 @@ router.post('/verify', authenticateToken, async (req, res) => {
         error: 'Missing required fields: userId, (vaultData or merkleRoot)'
       });
     }
+    if (!requireSelfUser(req, res, userId)) return;
     
     const storedData = await ethereumService.getVaultHash(userId);
     
@@ -290,25 +333,47 @@ router.get('/stats', authenticateToken, async (req, res) => {
 // Batch queue management endpoints
 router.post('/batch/flush', authenticateToken, async (req, res) => {
   try {
-    const { userId } = req.body;
-    
-    if (userId) {
-      // Flush specific user's queue
-      const result = await batchQueue.flushUserQueue(userId);
-      res.json({
-        success: true,
-        message: `Flushed queue for user ${userId}`,
-        data: result
-      });
-    } else {
-      // Flush all queues
-      const result = await batchQueue.flushAll();
-      res.json({
-        success: true,
-        message: 'Flushed all queues',
-        data: result
+    const requestedUserId = req.body?.userId;
+    const currentUserId = req.user?.userId;
+
+    // Security: users can flush only their own queue.
+    if (requestedUserId && requestedUserId !== currentUserId) {
+      return res.status(403).json({
+        success: false,
+        error: 'You can only flush your own queue'
       });
     }
+
+    const userId = requestedUserId || currentUserId;
+    let result = await batchQueue.flushUserQueue(userId);
+
+    // If in-memory queue is empty (e.g. server restarted), anchor from persisted pending ops.
+    if (!result.flushed) {
+      const latestQueued = await blockchainDecoder.getLatestQueuedOperation(userId);
+      if (latestQueued && latestQueued.vaultHash) {
+        const txResult = await ethereumService.storeVaultHash(userId, latestQueued.vaultHash);
+        if (txResult?.success && txResult?.txHash) {
+          await blockchainDecoder.markAnchoredForUser(userId, {
+            txHash: txResult.txHash,
+            blockNumber: txResult.blockNumber,
+            vaultHash: latestQueued.vaultHash
+          });
+          result = {
+            success: true,
+            flushed: 1,
+            txHash: txResult.txHash,
+            blockNumber: txResult.blockNumber,
+            restoredFromPersistedQueue: true
+          };
+        }
+      }
+    }
+
+    res.json({
+      success: true,
+      message: `Flushed queue for user ${userId}`,
+      data: result
+    });
   } catch (error) {
     res.status(500).json({
       success: false,

@@ -196,11 +196,14 @@ const AddCredential = ({ onAddCredential, onUpdateCredential, categories, isEdit
           updateData.salt = existingEncrypted.salt;
         }
         delete updateData.password; // Don't send plain password
-        await onUpdateCredential(id, updateData);
-        
-        // Show blockchain status in success message
-        if (blockchainStatus?.initialized) {
+        const result = await onUpdateCredential(id, updateData);
+        const bc = result?.blockchain;
+        if (bc?.txHash) {
           toast.success('Credential updated successfully. Blockchain transaction recorded.');
+        } else if (bc?.enabled && bc?.queued) {
+          toast.success(`Credential updated successfully. Blockchain anchoring queued${typeof bc.pendingCount === 'number' ? ` (pending: ${bc.pendingCount})` : ''}.`);
+        } else if (bc?.enabled === false) {
+          toast.success('Credential updated successfully. Blockchain is offline.');
         } else {
           toast.success('Credential updated successfully!');
         }
@@ -219,11 +222,14 @@ const AddCredential = ({ onAddCredential, onUpdateCredential, categories, isEdit
           throw new Error('Password is required for new credentials');
         }
         delete createData.password; // Don't send plain password
-        await onAddCredential(createData);
-        
-        // Show blockchain status in success message
-        if (blockchainStatus?.initialized) {
+        const result = await onAddCredential(createData);
+        const bc = result?.blockchain;
+        if (bc?.txHash) {
           toast.success('Credential added successfully. Blockchain transaction recorded.');
+        } else if (bc?.enabled && bc?.queued) {
+          toast.success(`Credential added successfully. Blockchain anchoring queued${typeof bc.pendingCount === 'number' ? ` (pending: ${bc.pendingCount})` : ''}.`);
+        } else if (bc?.enabled === false) {
+          toast.success('Credential added successfully. Blockchain is offline.');
         } else {
           toast.success('Credential added successfully!');
         }
