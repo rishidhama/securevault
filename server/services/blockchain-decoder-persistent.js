@@ -235,6 +235,39 @@ class PersistentBlockchainDecoder {
     }
   }
 
+  async getLatestQueuedOperationsDue(maxAgeMs, limitUsers = 20) {
+    try {
+      const cutoff = new Date(Date.now() - maxAgeMs);
+      const dueQueued = await BlockchainPendingOperation.find({
+        status: 'queued',
+        createdAt: { $lte: cutoff }
+      })
+        .sort({ createdAt: 1 })
+        .limit(limitUsers * 5);
+
+      if (!dueQueued.length) return [];
+
+      const userIds = Array.from(new Set(dueQueued.map((op) => op.userId))).slice(0, limitUsers);
+      const latestByUser = await Promise.all(
+        userIds.map(async (userId) => {
+          const latest = await BlockchainPendingOperation.findOne({ userId, status: 'queued' })
+            .sort({ createdAt: -1 });
+          if (!latest) return null;
+          return {
+            userId,
+            vaultHash: latest.vaultHash,
+            createdAt: latest.createdAt
+          };
+        })
+      );
+
+      return latestByUser.filter(Boolean);
+    } catch (error) {
+      console.error('Failed to get due queued operations:', error.message);
+      return [];
+    }
+  }
+
   async getUserOperationsSummary(userId) {
     const [queued, anchored] = await Promise.all([
       this.getUserPendingOperations(userId),

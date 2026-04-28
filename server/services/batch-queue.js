@@ -198,6 +198,39 @@ class BatchQueue {
     return this.flushDueUsers();
   }
 
+  async flushPersistedDueUsers() {
+    try {
+      // Persisted queued rows survive restarts; process rows older than maxWait.
+      const due = await blockchainDecoder.getLatestQueuedOperationsDue(this.maxWaitMs, this.maxUpdates);
+      if (!due.length) return { success: true, flushed: 0, mode: 'persisted-noop' };
+
+      let flushed = 0;
+      for (const item of due) {
+        // eslint-disable-next-line no-await-in-loop
+        const r = await ethereumService.storeVaultHash(item.userId, item.vaultHash);
+        if (r?.success && r?.txHash) {
+          // eslint-disable-next-line no-await-in-loop
+          await blockchainDecoder.markAnchoredForUser(item.userId, {
+            txHash: r.txHash,
+            blockNumber: r.blockNumber,
+            vaultHash: item.vaultHash
+          });
+          flushed += 1;
+        } else {
+          this.stats.totalFailed += 1;
+        }
+      }
+
+      if (flushed > 0) {
+        this.stats.totalIndividual += flushed;
+      }
+      return { success: true, flushed, mode: 'persisted-individual' };
+    } catch (error) {
+      this.stats.totalFailed += 1;
+      return { success: false, flushed: 0, mode: 'persisted-error', error: error.message };
+    }
+  }
+
   async flushImmediate(userId, vaultHash) {
     try {
       const result = await ethereumService.storeVaultHash(userId, vaultHash);
@@ -222,6 +255,8 @@ class BatchQueue {
         if (this.getTotalPendingCount() > 0) {
           await this.flushDueUsers();
         }
+        // Also check DB-persisted queued ops that may outlive process restarts.
+        await this.flushPersistedDueUsers();
       } catch (error) {
         console.error('Periodic flush error:', error.message);
       }
