@@ -14,6 +14,8 @@ const LoginEmail = () => {
       setError('Please enter a valid email address');
       return;
     }
+    // Persist login email so /login/master-key still works after refresh/direct open.
+    sessionStorage.setItem('securevault_login_email', email.trim().toLowerCase());
     navigate('/login/master-key', { state: { email } });
   };
 

@@ -9,7 +9,11 @@ import { deriveAuthSecret } from '../utils/authSecret';
 const LoginMasterKey = ({ onLoginSuccess }) => {
   const location = useLocation();
   const navigate = useNavigate();
-  const emailFromState = location.state?.email || '';
+  const emailFromState = (
+    location.state?.email
+    || sessionStorage.getItem('securevault_login_email')
+    || ''
+  ).trim().toLowerCase();
 
   const [masterKey, setMasterKey] = useState('');
   const [show, setShow] = useState(false);
@@ -352,6 +356,9 @@ const LoginMasterKey = ({ onLoginSuccess }) => {
       localStorage.setItem('securevault_token', authData.token);
       localStorage.setItem('securevault_user', JSON.stringify(authData.user));
       sessionStorage.setItem('securevault_master_key', masterKey); // For client-side encryption
+      if (emailFromState) {
+        sessionStorage.setItem('securevault_login_email', emailFromState);
+      }
       
       toast.success('Login successful!');
       
