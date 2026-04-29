@@ -525,7 +525,7 @@ function App() {
 
   return (
     <Router>
-      <div className="flex min-h-screen bg-secondary-50 flex-col">
+      <div className="h-screen overflow-hidden bg-secondary-50">
         {showAnchorResumeModal && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
             <div className="w-full max-w-md rounded-lg bg-white p-6 shadow-xl">
@@ -555,9 +555,10 @@ function App() {
             </div>
           </div>
         )}
-        <div className="flex flex-1 min-h-0">
+        <div className="flex h-full min-h-0">
           <Sidebar onLogout={handleLogout} />
-          <main className="flex-1 p-4 sm:p-6 lg:p-8 overflow-y-auto pt-16 lg:pt-0">
+          <main className="flex-1 min-h-0 overflow-y-auto p-4 pt-16 sm:p-6 sm:pt-16 lg:p-8 lg:pt-8">
+          <div className="mx-auto w-full max-w-7xl">
           <Breadcrumbs />
           <Routes>
             <Route 
@@ -660,6 +661,8 @@ function App() {
             />
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
+          <Footer />
+          </div>
         </main>
         </div>
         <Toaster
@@ -685,7 +688,6 @@ function App() {
             },
           }}
         />
-        <Footer />
       </div>
     </Router>
   );

@@ -1513,7 +1513,7 @@ const SettingsPage = ({ user, masterKey, onLogout, credentials, decryptPassword 
       <div className="hidden lg:block max-w-7xl mx-auto px-4">
         <div className="flex gap-8">
           {/* Desktop Settings Navigation */}
-          <div className="w-72 flex-shrink-0">
+          <div className="w-72 flex-shrink-0 sticky top-6 self-start pr-1">
             <div className="card shadow-sm border-secondary-100">
               <div className="p-4 border-b border-secondary-100">
                 <h2 className="text-lg font-semibold text-secondary-900">Settings</h2>
