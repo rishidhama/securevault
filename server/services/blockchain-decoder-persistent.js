@@ -65,18 +65,19 @@ class PersistentBlockchainDecoder {
 
   async markAnchoredForUser(userId, opts) {
     try {
-      const { txHash, blockNumber, vaultHash } = opts || {};
+      const { txHash, blockNumber, vaultHash, anchoredAt } = opts || {};
       if (!userId || !txHash) return { anchored: 0, superseded: 0 };
+      const anchoredAtDate = anchoredAt ? new Date(anchoredAt) : new Date();
 
       // If we know which vaultHash was anchored, anchor that and supersede older queued hashes.
       if (vaultHash) {
         const anchoredRes = await BlockchainPendingOperation.updateMany(
           { userId, status: 'queued', vaultHash },
-          { $set: { status: 'anchored', txHash, blockNumber: blockNumber || null, anchoredAt: new Date() } }
+          { $set: { status: 'anchored', txHash, blockNumber: blockNumber || null, anchoredAt: anchoredAtDate } }
         );
         const supersededRes = await BlockchainPendingOperation.updateMany(
           { userId, status: 'queued', vaultHash: { $ne: vaultHash } },
-          { $set: { status: 'superseded', anchoredAt: new Date() } }
+          { $set: { status: 'superseded', anchoredAt: anchoredAtDate } }
         );
         return { anchored: anchoredRes.modifiedCount || 0, superseded: supersededRes.modifiedCount || 0 };
       }
@@ -84,7 +85,7 @@ class PersistentBlockchainDecoder {
       // Fallback: anchor all queued items for the user.
       const res = await BlockchainPendingOperation.updateMany(
         { userId, status: 'queued' },
-        { $set: { status: 'anchored', txHash, blockNumber: blockNumber || null, anchoredAt: new Date() } }
+        { $set: { status: 'anchored', txHash, blockNumber: blockNumber || null, anchoredAt: anchoredAtDate } }
       );
       return { anchored: res.modifiedCount || 0, superseded: 0 };
     } catch (error) {

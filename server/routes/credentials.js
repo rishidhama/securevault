@@ -7,8 +7,14 @@ const { authenticateToken } = require('./auth');
 const ethereumService = require('../services/ethereum-service');
 const blockchainDecoder = require('../services/blockchain-decoder-persistent');
 const batchQueue = require('../services/batch-queue');
+const normalizeMerkleRoot = (value) => {
+  if (!value || typeof value !== 'string') return null;
+  const raw = value.startsWith('0x') ? value.slice(2) : value;
+  if (!/^[a-fA-F0-9]{64}$/.test(raw)) return null;
+  return raw.toLowerCase();
+};
 
-const createBlockchainEvent = async (userId, action, credentialId, credentialData = null) => {
+const createBlockchainEvent = async (userId, action, credentialId, credentialData = null, merkleRoot = null) => {
   try {
     if (!process.env.ETHEREUM_ENABLED || process.env.ETHEREUM_ENABLED !== 'true') {
       return { enabled: false, queued: false, txHash: null };
@@ -20,11 +26,12 @@ const createBlockchainEvent = async (userId, action, credentialId, credentialDat
       hasUrl: !!credentialData.url
     } : null;
 
+    const eventTimestamp = new Date().toISOString();
     const vaultData = {
       action,
       resource: 'CREDENTIAL',
       id: credentialId,
-      timestamp: new Date().toISOString(),
+      timestamp: eventTimestamp,
       ...credentialMeta
     };
 
@@ -34,13 +41,10 @@ const createBlockchainEvent = async (userId, action, credentialId, credentialDat
       credentialData: credentialMeta
     });
 
-    const crypto = require('crypto');
-    const vaultHash = crypto.createHash('sha256')
-      .update(JSON.stringify(vaultData))
-      .digest('hex');
+    const vaultHash = normalizeMerkleRoot(merkleRoot);
 
     if (!vaultHash || vaultHash.length === 0) {
-      throw new Error('Generated vault hash is empty');
+      throw new Error('Valid merkleRoot is required for anchoring');
     }
 
     // Persist as queued immediately so UI can show "Queued" even in batch mode.
@@ -48,7 +52,11 @@ const createBlockchainEvent = async (userId, action, credentialId, credentialDat
       userId,
       action,
       credentialId,
-      vaultData,
+      vaultData: {
+        ...vaultData,
+        canonicalStateVersion: 1,
+        anchorSource: 'client_merkle_root'
+      },
       vaultHash,
       credentialData: credentialMeta
     });
@@ -69,12 +77,21 @@ const createBlockchainEvent = async (userId, action, credentialId, credentialDat
         userId,
         action,
         credentialId,
-        vaultData,
+        vaultData: {
+          ...vaultData,
+          canonicalStateVersion: 1,
+          anchorSource: 'client_merkle_root'
+        },
         vaultHash,
         blockNumber: result.blockNumber,
         credentialData: credentialMeta
       });
-      await blockchainDecoder.markAnchoredForUser(userId, { txHash: result.txHash, blockNumber: result.blockNumber, vaultHash });
+      await blockchainDecoder.markAnchoredForUser(userId, {
+        txHash: result.txHash,
+        blockNumber: result.blockNumber,
+        vaultHash,
+        anchoredAt: result.blockTimestamp ? new Date(result.blockTimestamp * 1000) : undefined
+      });
     }
     
     console.log(`Blockchain event logged: ${action} credential ${credentialId}`, {
@@ -315,14 +332,26 @@ router.post('/', authenticateToken, validateCredential, async (req, res) => {
       return res.status(400).json({ success: false, errors: errors.array() });
     }
     
+    const { merkleRoot, ...credentialPayload } = req.body;
+    const normalizedMerkleRoot = normalizeMerkleRoot(merkleRoot);
+    if (!normalizedMerkleRoot) {
+      return res.status(400).json({ success: false, error: 'Valid merkleRoot is required' });
+    }
+
     const credential = new Credential({
-      ...req.body,
+      ...credentialPayload,
       userId: req.user.userId
     });
     
     await credential.save();
     
-    const blockchain = await createBlockchainEvent(req.user.userId, 'CREATE', credential._id.toString(), credential);
+    const blockchain = await createBlockchainEvent(
+      req.user.userId,
+      'CREATE',
+      credential._id.toString(),
+      credential,
+      normalizedMerkleRoot
+    );
     
     res.status(201).json({
       success: true,
@@ -347,9 +376,15 @@ router.put('/:id', authenticateToken, validatePartialUpdate, async (req, res) =>
       return res.status(400).json({ success: false, errors: errors.array() });
     }
     
+    const { merkleRoot, ...updatePayload } = req.body;
+    const normalizedMerkleRoot = normalizeMerkleRoot(merkleRoot);
+    if (!normalizedMerkleRoot) {
+      return res.status(400).json({ success: false, error: 'Valid merkleRoot is required' });
+    }
+
     const credential = await Credential.findOneAndUpdate(
       { _id: req.params.id, userId: req.user.userId },
-      req.body,
+      updatePayload,
       { new: true, runValidators: true }
     ).select('-__v');
     
@@ -357,7 +392,13 @@ router.put('/:id', authenticateToken, validatePartialUpdate, async (req, res) =>
       return res.status(404).json({ success: false, error: 'Credential not found' });
     }
     
-    const blockchain = await createBlockchainEvent(req.user.userId, 'UPDATE', credential._id.toString(), credential);
+    const blockchain = await createBlockchainEvent(
+      req.user.userId,
+      'UPDATE',
+      credential._id.toString(),
+      credential,
+      normalizedMerkleRoot
+    );
     
     res.json({
       success: true,
@@ -384,6 +425,11 @@ router.put('/:id', authenticateToken, validatePartialUpdate, async (req, res) =>
 
 router.delete('/:id', authenticateToken, async (req, res) => {
   try {
+    const normalizedMerkleRoot = normalizeMerkleRoot(req.body?.merkleRoot);
+    if (!normalizedMerkleRoot) {
+      return res.status(400).json({ success: false, error: 'Valid merkleRoot is required' });
+    }
+
     const credential = await Credential.findOneAndDelete({ 
       _id: req.params.id, 
       userId: req.user.userId 
@@ -393,7 +439,13 @@ router.delete('/:id', authenticateToken, async (req, res) => {
       return res.status(404).json({ success: false, error: 'Credential not found' });
     }
     
-    const blockchain = await createBlockchainEvent(req.user.userId, 'DELETE', credential._id.toString(), credential);
+    const blockchain = await createBlockchainEvent(
+      req.user.userId,
+      'DELETE',
+      credential._id.toString(),
+      credential,
+      normalizedMerkleRoot
+    );
     
     res.json({ success: true, message: 'Credential deleted successfully', blockchain });
   } catch (error) {

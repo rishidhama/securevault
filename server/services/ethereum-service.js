@@ -225,6 +225,7 @@ class VaultChain {
       const receipt = await tx.wait();
       const confirmTs = Date.now();
       console.log(`Transaction confirmed in block ${receipt.blockNumber}`);
+      const block = await this.provider.getBlock(receipt.blockNumber);
 
       // Structured log for benchmarking anchoring latency and gas usage
       try {
@@ -251,7 +252,8 @@ class VaultChain {
         success: true,
         txHash: tx.hash,
         blockNumber: receipt.blockNumber,
-        gasUsed: receipt.gasUsed.toString()
+        gasUsed: receipt.gasUsed.toString(),
+        blockTimestamp: block?.timestamp || null
       };
       
     } catch (error) {
@@ -308,13 +310,15 @@ class VaultChain {
       const receipt = await tx.wait();
       const confirmTs = Date.now();
       console.log(`Batch transaction confirmed in block ${receipt.blockNumber}`);
+      const block = await this.provider.getBlock(receipt.blockNumber);
 
       return {
         success: true,
         txHash: tx.hash,
         blockNumber: receipt.blockNumber,
         gasUsed: receipt.gasUsed.toString(),
-        itemsUpdated: updates.length
+        itemsUpdated: updates.length,
+        blockTimestamp: block?.timestamp || null
       };
       
     } catch (error) {

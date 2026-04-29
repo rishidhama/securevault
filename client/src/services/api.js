@@ -160,8 +160,9 @@ export const credentialsAPI = {
     body: JSON.stringify(credential)
   }),
   
-  remove: (id) => apiRequest(`/api/credentials/${id}`, {
-    method: 'DELETE'
+  remove: (id, payload = null) => apiRequest(`/api/credentials/${id}`, {
+    method: 'DELETE',
+    ...(payload ? { body: JSON.stringify(payload) } : {})
   }),
   
   toggleFavorite: (id) => apiRequest(`/api/credentials/${id}/favorite`, {

@@ -116,7 +116,8 @@ class BatchQueue {
             await blockchainDecoder.markAnchoredForUser(s.userId, {
               txHash: result.txHash,
               blockNumber: result.blockNumber,
-              vaultHash: s.latestVaultHash
+              vaultHash: s.latestVaultHash,
+              anchoredAt: result.blockTimestamp ? new Date(result.blockTimestamp * 1000) : undefined
             });
           }
         }
@@ -154,7 +155,8 @@ class BatchQueue {
             await blockchainDecoder.markAnchoredForUser(s.userId, {
               txHash: r.txHash,
               blockNumber: r.blockNumber,
-              vaultHash: s.latestVaultHash
+              vaultHash: s.latestVaultHash,
+              anchoredAt: r.blockTimestamp ? new Date(r.blockTimestamp * 1000) : undefined
             });
           }
         } else {
@@ -181,7 +183,8 @@ class BatchQueue {
           await blockchainDecoder.markAnchoredForUser(userId, {
             txHash: r.txHash,
             blockNumber: r.blockNumber,
-            vaultHash: s.latestVaultHash
+            vaultHash: s.latestVaultHash,
+            anchoredAt: r.blockTimestamp ? new Date(r.blockTimestamp * 1000) : undefined
           });
         }
       } else {
@@ -213,7 +216,8 @@ class BatchQueue {
           await blockchainDecoder.markAnchoredForUser(item.userId, {
             txHash: r.txHash,
             blockNumber: r.blockNumber,
-            vaultHash: item.vaultHash
+            vaultHash: item.vaultHash,
+            anchoredAt: r.blockTimestamp ? new Date(r.blockTimestamp * 1000) : undefined
           });
           flushed += 1;
         } else {

@@ -29,6 +29,8 @@ import IncrementalMerkleTree from './utils/incremental-merkle';
 
 import './index.css';
 
+const EMPTY_VAULT_ROOT = '0'.repeat(64);
+
 function Breadcrumbs() {
   const location = useLocation();
   const pathnames = location.pathname.split('/').filter(x => x);
@@ -390,23 +392,33 @@ function App() {
         delete newCredential.password;
       }
 
-      const response = await credentialsAPI.create(newCredential);
+      const optimisticCredential = {
+        ...newCredential,
+        _id: '__pending_new__',
+        id: '__pending_new__',
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+      };
+      const addNextCredentials = [optimisticCredential, ...credentials];
+      const addTree = new IncrementalMerkleTree();
+      const addRoot = (await addTree.initFromCredentials(addNextCredentials)) || EMPTY_VAULT_ROOT;
+
+      const response = await credentialsAPI.create({
+        ...newCredential,
+        merkleRoot: addRoot
+      });
       
       const newCredentialData = response.data || response;
-      setCredentials(prev => [newCredentialData, ...prev]);
+      const nextCredentials = [newCredentialData, ...credentials];
+      setCredentials(nextCredentials);
       setStats(prev => ({ ...prev, total: prev.total + 1 }));
 
       try { await encryptionService.warmDecryptCache([newCredentialData], masterKey); } catch (_) {}
 
-      // Anchoring source of truth is server-side credentials routes.
-      // Avoid duplicate client-side anchoring calls that create conflicting queue states.
-      if (user?.id) {
-        try {
-          const credId = newCredentialData._id || newCredentialData.id;
-          await merkleTree.addLeaf(credId, newCredentialData);
-        } catch {
-          // Non-blocking: merkle update failure shouldn't interrupt the credential flow.
-        }
+      try {
+        await merkleTree.initFromCredentials(nextCredentials);
+      } catch {
+        // Non-blocking: local tree sync failure shouldn't interrupt the credential flow.
       }
       
       return { credential: newCredentialData, blockchain: response.blockchain || null };
@@ -417,16 +429,18 @@ function App() {
 
   const handleDeleteCredential = async (id) => {
     try {
-      await credentialsAPI.remove(id);
-      setCredentials(prev => prev.filter(cred => cred._id !== id));
+      const nextCredentials = credentials.filter(cred => cred._id !== id);
+      const deleteTree = new IncrementalMerkleTree();
+      const deleteRoot = (await deleteTree.initFromCredentials(nextCredentials)) || EMPTY_VAULT_ROOT;
+
+      await credentialsAPI.remove(id, { merkleRoot: deleteRoot });
+      setCredentials(nextCredentials);
       setStats(prev => ({ ...prev, total: prev.total - 1 }));
 
-      if (user?.id) {
-        try {
-          await merkleTree.deleteLeaf(id);
-        } catch {
-          // Non-blocking: merkle update failure shouldn't interrupt the deletion flow.
-        }
+      try {
+        await merkleTree.initFromCredentials(nextCredentials);
+      } catch {
+        // Non-blocking: local tree sync failure shouldn't interrupt the deletion flow.
       }
     } catch (error) {
       throw error;
@@ -453,22 +467,21 @@ function App() {
 
   const handleUpdateCredential = async (id, updates) => {
     try {
-      const response = await credentialsAPI.update(id, updates);
-      let updatedCredential;
-      setCredentials(prev => {
-        updatedCredential = prev.find(cred => cred._id === id);
-        const updated = { ...updatedCredential, ...response.data };
-        return prev.map(cred => cred._id === id ? updated : cred);
-      });
+      const existingCredential = credentials.find((cred) => cred._id === id);
+      const localUpdatedCredential = existingCredential ? { ...existingCredential, ...updates } : updates;
+      const nextCredentials = credentials.map((cred) => (cred._id === id ? localUpdatedCredential : cred));
+      const updateTree = new IncrementalMerkleTree();
+      const updateRoot = (await updateTree.initFromCredentials(nextCredentials)) || EMPTY_VAULT_ROOT;
 
-      if (user?.id) {
-        try {
-          const credId = id;
-          const updated = updatedCredential ? { ...updatedCredential, ...response.data } : response.data;
-          await merkleTree.updateLeaf(credId, updated);
-        } catch {
-          // Non-blocking: merkle update failure shouldn't interrupt the update flow.
-        }
+      const response = await credentialsAPI.update(id, { ...updates, merkleRoot: updateRoot });
+      const serverUpdatedCredential = response.data || response;
+      const finalCredentials = credentials.map((cred) => (cred._id === id ? serverUpdatedCredential : cred));
+      setCredentials(finalCredentials);
+
+      try {
+        await merkleTree.initFromCredentials(finalCredentials);
+      } catch {
+        // Non-blocking: local tree sync failure shouldn't interrupt the update flow.
       }
       return { credential: response.data || response, blockchain: response.blockchain || null };
     } catch (error) {
