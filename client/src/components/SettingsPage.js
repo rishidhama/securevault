@@ -36,12 +36,6 @@ import encryptionService from '../utils/encryption';
 import { deriveAuthSecret } from '../utils/authSecret';
 
 const SettingsPage = ({ user, masterKey, onLogout, credentials, decryptPassword }) => {
-  console.log('SettingsPage rendered with props:', {
-    user: user ? 'Present' : 'Missing',
-    masterKey: masterKey ? 'Present' : 'Missing',
-    credentialsCount: credentials?.length || 0
-  });
-
   const navigate = useNavigate();
   const [isLoading, setIsLoading] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
@@ -96,7 +90,6 @@ const SettingsPage = ({ user, masterKey, onLogout, credentials, decryptPassword 
           setPreferences(prev => ({ ...prev, ...res.data }));
         }
       } catch (e) {
-        console.warn('Failed to load preferences, using defaults');
       }
     };
     if (user) loadPreferences();
@@ -121,22 +114,17 @@ const SettingsPage = ({ user, masterKey, onLogout, credentials, decryptPassword 
       
       const token = localStorage.getItem('securevault_token');
       if (!token) {
-        console.log('No authentication token found, skipping MFA status check');
         return;
       }
       
       try {
         const response = await mfaAPI.status();
-        console.log('MFA Status Response:', response.data);
         if (response.success && response.data.backupCodes) {
-          console.log('Setting backup codes:', response.data.backupCodes);
           setBackupCodes(response.data.backupCodes);
         }
       } catch (error) {
-        console.error('Failed to load existing backup codes:', error);
         // Don't show error to user if it's just an authentication issue
         if (error.message.includes('401') || error.message.includes('403')) {
-          console.log('Authentication required for MFA status');
         }
       }
     };
@@ -373,7 +361,6 @@ const SettingsPage = ({ user, masterKey, onLogout, credentials, decryptPassword 
 
       toast.success('Vault exported successfully!');
     } catch (error) {
-      console.error('Export failed:', error);
       toast.error('Failed to export vault');
     } finally {
       setIsLoading(false);
@@ -441,7 +428,6 @@ const SettingsPage = ({ user, masterKey, onLogout, credentials, decryptPassword 
         throw new Error(result.error || 'Import failed');
       }
     } catch (error) {
-      console.error('Import failed:', error);
       toast.error(error.message || 'Failed to import vault');
     } finally {
       setIsLoading(false);
@@ -463,7 +449,6 @@ const SettingsPage = ({ user, masterKey, onLogout, credentials, decryptPassword 
         throw new Error('Failed to delete account');
       }
     } catch (error) {
-      console.error('Delete account failed:', error);
       toast.error('Failed to delete account');
     } finally {
       setIsLoading(false);
@@ -514,7 +499,6 @@ const SettingsPage = ({ user, masterKey, onLogout, credentials, decryptPassword 
         throw new Error(error.message || 'Failed to change master key');
       }
     } catch (error) {
-      console.error('Change master key failed:', error);
       toast.error(error.message || 'Failed to change master key');
     } finally {
       setIsLoading(false);
@@ -562,7 +546,6 @@ const SettingsPage = ({ user, masterKey, onLogout, credentials, decryptPassword 
           setMfaSecret(data.secret);
           setMfaQRCode(data.qrCode);
           if (data.backupCodes) {
-            console.log('MFA Setup - Setting backup codes:', data.backupCodes);
             setBackupCodes(data.backupCodes);
           }
           toast.success('MFA secret generated. Please scan the QR code with your authenticator app.');
@@ -606,7 +589,6 @@ const SettingsPage = ({ user, masterKey, onLogout, credentials, decryptPassword 
         throw new Error(error.message || 'Failed to disable MFA');
       }
     } catch (error) {
-      console.error('Disable MFA failed:', error);
       toast.error(error.message || 'Failed to disable MFA');
     } finally {
       setIsLoading(false);
@@ -635,7 +617,6 @@ const SettingsPage = ({ user, masterKey, onLogout, credentials, decryptPassword 
         throw new Error(error.message || 'Failed to regenerate backup codes');
       }
     } catch (error) {
-      console.error('Regenerate backup codes failed:', error);
       toast.error(error.message || 'Failed to regenerate backup codes');
     } finally {
       setIsLoading(false);

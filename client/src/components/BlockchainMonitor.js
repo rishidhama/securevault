@@ -9,7 +9,6 @@ import {
   RefreshCw,
   Activity,
   Hash,
-  Calendar,
   Wallet
 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
@@ -21,35 +20,46 @@ const BlockchainMonitor = ({ userId }) => {
   const [refreshing, setRefreshing] = useState(false);
   const [lastUpdate, setLastUpdate] = useState(null);
 
+  const getExplorerBase = (chainId) => {
+    const id = chainId === undefined || chainId === null ? '' : String(chainId);
+    // Chain IDs:
+    // - 11155111 = Sepolia (Ethereum)
+    // - 421614 = Arbitrum Sepolia
+    if (id === '421614') return 'https://sepolia.arbiscan.io';
+    if (id === '11155111') return 'https://sepolia.etherscan.io';
+    return 'https://sepolia.arbiscan.io';
+  };
+
   const fetchBlockchainData = async () => {
     try {
       setRefreshing(true);
       
       const token = localStorage.getItem('securevault_token');
       if (!token) {
-        console.log('User not authenticated, skipping blockchain data fetch');
         setLoading(false);
         setRefreshing(false);
         return;
       }
       
-      const statusRes = await blockchainAPI.status();
-      setStatus(statusRes.ethereum);
-      
+      const requests = [blockchainAPI.status()];
+      if (userId) requests.push(blockchainAPI.operations(userId));
+      const [statusResult, opsResult] = await Promise.allSettled(requests);
+
+      if (statusResult.status === 'fulfilled') {
+        setStatus(statusResult.value?.ethereum || null);
+      }
+
       if (userId) {
-        try {
-          const opsRes = await blockchainAPI.operations(userId);
-          const anchored = opsRes?.data?.anchored || [];
+        if (opsResult?.status === 'fulfilled') {
+          const anchored = opsResult.value?.data?.anchored || [];
           setTransactions(anchored);
-        } catch (error) {
-          console.log('No transaction history available yet');
+        } else {
           setTransactions([]);
         }
       }
       
       setLastUpdate(new Date());
     } catch (error) {
-      console.error('Failed to fetch blockchain data:', error);
       // Don't show error toast if it's an authentication issue
       if (!error.message.includes('Authentication')) {
         toast.error('Failed to fetch blockchain status');
@@ -186,13 +196,13 @@ const BlockchainMonitor = ({ userId }) => {
             {networkInfo.contractAddress && (
               <div className="flex justify-center">
                 <a
-                  href={`https://sepolia.arbiscan.io/address/${networkInfo.contractAddress}`}
+                  href={`${getExplorerBase(networkInfo.chainId)}/address/${networkInfo.contractAddress}`}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="inline-flex items-center gap-2 text-primary-600 hover:text-primary-700 text-sm"
                 >
                   <ExternalLink className="w-4 h-4" />
-                  View Contract on Etherscan
+                  View Contract on Explorer
                 </a>
               </div>
             )}
@@ -219,7 +229,7 @@ const BlockchainMonitor = ({ userId }) => {
 
           {transactions.length === 0 ? (
             <div className="text-center py-8">
-              <div className="text-secondary-500 mb-2">No blockchain transactions yet</div>
+              <div className="text-secondary-500 mb-2">No on-chain transactions yet</div>
               <div className="text-sm text-secondary-400">
                 Transactions will appear here when you add, update, or delete credentials
               </div>
@@ -244,7 +254,7 @@ const BlockchainMonitor = ({ userId }) => {
                       {tx.txHash.slice(0, 10)}...{tx.txHash.slice(-8)}
                     </div>
                     <a
-                      href={tx.etherscanUrl || `https://sepolia.arbiscan.io/tx/${tx.txHash}`}
+                      href={tx.etherscanUrl || `${getExplorerBase(networkInfo.chainId)}/tx/${tx.txHash}`}
                       target="_blank"
                       rel="noopener noreferrer"
                       className="text-primary-600 hover:text-primary-700"

@@ -45,7 +45,9 @@ const BlockchainStatus = () => {
     <div className="bg-white border border-secondary-200 rounded-lg p-4">
       <div className="flex items-center justify-between">
         <div>
-          <div className="text-sm font-medium text-secondary-700">Blockchain (Sepolia)</div>
+          <div className="text-sm font-medium text-secondary-700">
+            Blockchain {info.network ? `(${info.network})` : ''}
+          </div>
           {status?.initialized ? (
             <div className="text-xs text-secondary-500 mt-1">
               Connected · {info.network} · ChainId {info.chainId}

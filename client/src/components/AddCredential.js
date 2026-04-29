@@ -13,13 +13,12 @@ import {
   Globe,
   FileText,
   Zap,
-  Activity,
   CheckCircle,
   XCircle
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import encryptionService from '../utils/encryption';
-import { credentialsAPI, blockchainAPI } from '../services/api';
+import { blockchainAPI } from '../services/api';
 import { checkPasswordBreach } from '../utils/encryption';
 
 const AddCredential = ({ onAddCredential, onUpdateCredential, categories, isEdit, credentials }) => {
@@ -70,7 +69,6 @@ const AddCredential = ({ onAddCredential, onUpdateCredential, categories, isEdit
         
         const token = localStorage.getItem('securevault_token');
         if (!token) {
-          console.log('User not authenticated, skipping blockchain status fetch');
           setBlockchainStatus(null);
           setBlockchainLoading(false);
           return;
@@ -79,7 +77,6 @@ const AddCredential = ({ onAddCredential, onUpdateCredential, categories, isEdit
         const status = await blockchainAPI.status();
         setBlockchainStatus(status.ethereum);
       } catch (error) {
-        console.log('Blockchain status not available');
         setBlockchainStatus(null);
       } finally {
         setBlockchainLoading(false);
@@ -236,14 +233,6 @@ const AddCredential = ({ onAddCredential, onUpdateCredential, categories, isEdit
       }
       navigate('/');
     } catch (error) {
-      console.error('Credential operation failed:', error);
-      console.error('Error details:', {
-        message: error.message,
-        stack: error.stack,
-        isEdit: isEdit,
-        formData: formData
-      });
-      
       let errorMessage = isEdit ? 'Failed to update credential' : 'Failed to add credential';
       if (error.message) {
         errorMessage += `: ${error.message}`;

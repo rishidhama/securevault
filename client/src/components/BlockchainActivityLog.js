@@ -9,8 +9,6 @@ import {
   ExternalLink,
   RefreshCw,
   Hash,
-  Calendar,
-  User,
   Tag,
   Globe
 } from 'lucide-react';
@@ -28,7 +26,6 @@ const BlockchainActivityLog = ({ userId }) => {
       
       const token = localStorage.getItem('securevault_token');
       if (!token) {
-        console.log('User not authenticated, skipping activity log fetch');
         setLoading(false);
         setRefreshing(false);
         return;
@@ -41,14 +38,12 @@ const BlockchainActivityLog = ({ userId }) => {
           setQueued(data.queued || []);
           setAnchored(data.anchored || []);
         } catch (error) {
-          console.log('No blockchain activity available yet');
           setQueued([]);
           setAnchored([]);
         }
       }
       
     } catch (error) {
-      console.error('Failed to fetch activity log:', error);
       if (!error.message.includes('Authentication')) {
         toast.error('Failed to fetch blockchain activity');
       }
@@ -170,7 +165,7 @@ const BlockchainActivityLog = ({ userId }) => {
             Blockchain activity will appear here when you add, update, or delete credentials
           </p>
           <div className="text-sm text-secondary-400">
-            Each operation is recorded on the Sepolia blockchain for tamper-evidence
+            Each operation is recorded on the configured blockchain network for tamper-evidence
           </div>
         </div>
       ) : (
@@ -251,8 +246,8 @@ const BlockchainActivityLog = ({ userId }) => {
           <div>
             <div className="text-sm font-medium text-blue-800 mb-1">How Blockchain Activity Works</div>
             <div className="text-sm text-blue-700">
-              Every credential operation (add, update, delete) is automatically recorded on the Sepolia blockchain. 
-              The blockchain stores a cryptographic hash of the operation details, providing tamper-evidence 
+              Every credential operation (add, update, delete) is automatically recorded on the configured blockchain
+              network. The blockchain stores a cryptographic hash of the operation details, providing tamper-evidence
               and a permanent audit trail of all changes to your vault.
             </div>
           </div>

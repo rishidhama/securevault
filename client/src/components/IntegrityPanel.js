@@ -8,17 +8,27 @@ const IntegrityPanel = () => {
   const [lastAnchor, setLastAnchor] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
 
+  const getExplorerBase = (chainId) => {
+    const id = chainId === undefined || chainId === null ? '' : String(chainId);
+    if (id === '421614') return 'https://sepolia.arbiscan.io';
+    if (id === '42161') return 'https://arbiscan.io';
+    if (id === '11155111') return 'https://sepolia.etherscan.io';
+    return 'https://sepolia.arbiscan.io';
+  };
+
   const loadStatus = async () => {
     try {
       const res = await blockchainAPI.status();
-      if (res.enabled) {
-        setStatus(res);
-        // For blockchain, we don't have a "last anchor" concept in the same way
-        // Instead, we'll show the contract info
+      const eth = res?.ethereum || null;
+      if (eth) {
+        setStatus(eth);
+        const info = eth.networkInfo || {};
+        // We don't track "last anchor" events here; we surface the currently configured contract/network info.
         setLastAnchor({
-          contract: res.contract,
-          network: res.network,
-          balance: res.balance
+          contract: info.contractAddress || eth.contract,
+          network: info.network || eth.network,
+          chainId: info.chainId,
+          balance: info.balance || eth.balance
         });
       }
     } catch (e) {
@@ -57,12 +67,20 @@ const IntegrityPanel = () => {
         </button>
       </div>
       <div className="text-xs text-secondary-600">
-        <div className="mb-2">Real-time blockchain anchoring to Sepolia testnet for tamper-evidence.</div>
+        <div className="mb-2">
+          Real-time blockchain anchoring for tamper-evidence.
+        </div>
         {status && (
           <div className="grid grid-cols-1 md:grid-cols-3 gap-2 text-secondary-700">
             <div>Enabled: <span className="font-medium">{status.enabled ? 'Yes' : 'No'}</span></div>
-            <div>Network: <span className="font-medium">{status.network}</span></div>
-            <div>Wallet: <span className="font-medium">{status.wallet?.slice(0, 6)}...{status.wallet?.slice(-4)}</span></div>
+            <div>Network: <span className="font-medium">{status.networkInfo?.network || '—'}</span></div>
+            <div>
+              Wallet: <span className="font-medium">
+                {status.networkInfo?.walletAddress
+                  ? `${status.networkInfo.walletAddress.slice(0, 6)}...${status.networkInfo.walletAddress.slice(-4)}`
+                  : '—'}
+              </span>
+            </div>
           </div>
         )}
         {lastAnchor && (
@@ -77,11 +95,11 @@ const IntegrityPanel = () => {
               <div className="mt-1">
                 <a
                   className="inline-flex items-center gap-1 text-primary-700 underline"
-                  href={`https://sepolia.etherscan.io/address/${lastAnchor.contract}`}
+                  href={`${getExplorerBase(lastAnchor.chainId)}/address/${lastAnchor.contract}`}
                   target="_blank"
                   rel="noreferrer"
                 >
-                  <LinkIcon className="w-3 h-3" /> View Contract on Etherscan
+                  <LinkIcon className="w-3 h-3" /> View Contract on Explorer
                 </a>
               </div>
             )}

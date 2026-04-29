@@ -23,7 +23,6 @@ const BlockchainStatusSummary = ({ userId }) => {
           const statusRes = await blockchainAPI.status();
           setStatus(statusRes?.ethereum || null);
         } catch (error) {
-          console.log('Blockchain status not available:', error.message);
           // Set a default status indicating blockchain is not available
           setStatus({
             initialized: false,
@@ -32,12 +31,12 @@ const BlockchainStatusSummary = ({ userId }) => {
           });
         }
 
-        // Fetch activity count
+        // Fetch activity count (anchored operations represent recorded on-chain activity)
         try {
-          const activityRes = await blockchainAPI.activity(userId);
-          setActivityCount(activityRes.data?.length || 0);
-        } catch (error) {
-          // Activity might not be available yet
+          const opsRes = await blockchainAPI.operations(userId);
+          const data = opsRes?.data || {};
+          setActivityCount((data.anchored || []).length);
+        } catch {
           setActivityCount(0);
         }
 
@@ -52,7 +51,6 @@ const BlockchainStatusSummary = ({ userId }) => {
         }
 
       } catch (error) {
-        console.error('Failed to fetch blockchain status:', error);
         setStatus({
           initialized: false,
           connected: false,

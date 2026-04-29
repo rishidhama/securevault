@@ -138,27 +138,22 @@ function App() {
         const response = await authAPI.profile();
 
         if (response.success) {
-          console.log('Token valid, setting authenticated state');
           setUser(response.data.user);
           if (storedMasterKey) {
             setMasterKey(storedMasterKey);
           }
           setIsAuthenticated(true);
         } else {
-          console.log('Token invalid, clearing storage');
           clearAuthData();
         }
       } catch (error) {
         if (error.message && error.message.includes('Authentication required')) {
-          console.log('Authentication token invalid or expired');
           clearAuthData();
         } else {
-          console.error('Auth check failed:', error);
           setIsAuthenticated(false);
         }
       }
     } catch (error) {
-      console.error('Auth check failed:', error);
       setIsAuthenticated(false);
     } finally {
       setIsLoading(false);
@@ -271,7 +266,6 @@ function App() {
         encryptionService.warmDecryptCache(creds, masterKey).catch(() => {});
       }
     } catch (error) {
-      console.error('Failed to load data:', error.message || error);
       setCredentials([]);
       setStats({ total: 0, favorites: 0, categories: 0 });
       setCategories([]);
@@ -303,8 +297,8 @@ function App() {
           const userIdentifier = authData.user.email || authData.user.id;
           const userSalt = encryptionService.getOrGenerateUserSalt(userIdentifier);
           await encryptionService.initializeSessionVaultKey(masterKey, userSalt);
-        } catch (error) {
-          console.warn('Failed to initialize session vault key, will use legacy format:', error);
+        } catch {
+          // Non-blocking: session vault key initialization may fail (e.g. legacy data). Continue with login UX.
         }
       }
       
@@ -323,11 +317,9 @@ function App() {
         }
       } catch (error) {
         // If profile fetch fails or times out, continue with login data
-        console.log('Profile fetch skipped (using login data):', error.message);
         await checkPendingAnchors(authData.user);
       }
     } catch (error) {
-      console.error('Login success handler error:', error);
       setUser(authData.user);
       setMasterKey(authData.masterKey || '');
       setIsAuthenticated(true);
@@ -347,9 +339,8 @@ function App() {
         const userIdentifier = authData.user.email || authData.user.id;
         const userSalt = encryptionService.getOrGenerateUserSalt(userIdentifier);
         await encryptionService.initializeSessionVaultKey(masterKey, userSalt);
-        console.log('Session vault key initialized for new user');
-      } catch (error) {
-        console.warn('Failed to initialize session vault key:', error);
+      } catch {
+        // Non-blocking: session vault key initialization should not break login UX.
       }
     }
   };
@@ -360,8 +351,8 @@ function App() {
       if (token) {
         await authAPI.logout();
       }
-    } catch (error) {
-      console.error('Logout error:', error);
+    } catch {
+      // Non-blocking: logout should still clear local/session data even if the request fails.
     } finally {
       // Clear encryption caches for security
       encryptionService.clearCache();
@@ -413,8 +404,8 @@ function App() {
         try {
           const credId = newCredentialData._id || newCredentialData.id;
           await merkleTree.addLeaf(credId, newCredentialData);
-        } catch (e) {
-          console.log('Merkle update skipped (non-blocking):', e?.message || e);
+        } catch {
+          // Non-blocking: merkle update failure shouldn't interrupt the credential flow.
         }
       }
       
@@ -433,8 +424,8 @@ function App() {
       if (user?.id) {
         try {
           await merkleTree.deleteLeaf(id);
-        } catch (e) {
-          console.log('Merkle update skipped (non-blocking):', e?.message || e);
+        } catch {
+          // Non-blocking: merkle update failure shouldn't interrupt the deletion flow.
         }
       }
     } catch (error) {
@@ -475,8 +466,8 @@ function App() {
           const credId = id;
           const updated = updatedCredential ? { ...updatedCredential, ...response.data } : response.data;
           await merkleTree.updateLeaf(credId, updated);
-        } catch (e) {
-          console.log('Merkle update skipped (non-blocking):', e?.message || e);
+        } catch {
+          // Non-blocking: merkle update failure shouldn't interrupt the update flow.
         }
       }
       return { credential: response.data || response, blockchain: response.blockchain || null };
@@ -489,7 +480,6 @@ function App() {
     try {
       return encryptionService.decryptPassword(encryptedPassword, masterKey, iv, salt);
     } catch (error) {
-      console.error('Decryption failed:', error);
       return '*** Decryption Failed ***';
     }
   };

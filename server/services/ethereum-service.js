@@ -19,6 +19,9 @@ class VaultChain {
     this.wallet = null;
     this.contract = null;
     this.initialized = false;
+    this.networkInfoCache = null;
+    this.networkInfoCacheAt = 0;
+    this.networkInfoCacheTtlMs = Number(process.env.NETWORK_INFO_CACHE_TTL_MS || 15000);
   }
 
   hashUserId(userId) {
@@ -368,13 +371,23 @@ class VaultChain {
 
   async getNetworkInfo() {
     if (!this.provider) return null;
+    const now = Date.now();
+    if (
+      this.networkInfoCache &&
+      this.networkInfoCacheAt &&
+      now - this.networkInfoCacheAt < this.networkInfoCacheTtlMs
+    ) {
+      return this.networkInfoCache;
+    }
     
     try {
-      const network = await this.provider.getNetwork();
-      const balance = await this.wallet.getBalance();
-      const gasPrice = await this.provider.getGasPrice();
-      
-      return {
+      const [network, balance, gasPrice] = await Promise.all([
+        this.provider.getNetwork(),
+        this.wallet.getBalance(),
+        this.provider.getGasPrice()
+      ]);
+
+      const info = {
         network: network.name,
         chainId: network.chainId,
         walletAddress: this.wallet.address,
@@ -382,6 +395,9 @@ class VaultChain {
         gasPrice: ethers.utils.formatUnits(gasPrice, 'gwei') + ' Gwei',
         contractAddress: this.contractAddress
       };
+      this.networkInfoCache = info;
+      this.networkInfoCacheAt = now;
+      return info;
     } catch (error) {
       return { error: error.message };
     }

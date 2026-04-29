@@ -44,7 +44,6 @@ const LoginMasterKey = ({ onLoginSuccess }) => {
         setBiometricSupported(available);
       }
     } catch (error) {
-      console.error('Biometric support check failed:', error);
     }
   };
 
@@ -126,15 +125,11 @@ const LoginMasterKey = ({ onLoginSuccess }) => {
         }
       };
 
-      console.log('Creating biometric credential with options:', credentialOptions);
-
       const credential = await window.navigator.credentials.create(credentialOptions);
       
       if (!credential) {
         throw new Error('Failed to create biometric credential - user may have cancelled');
       }
-
-      console.log('Credential created successfully:', credential);
 
       const credentialData = {
         id: credential.id,
@@ -153,15 +148,12 @@ const LoginMasterKey = ({ onLoginSuccess }) => {
       try {
         await authAPI.enableBiometric(credentialData);
       } catch (serverError) {
-        console.warn('Failed to store credential on server:', serverError);
       }
 
       setBiometricEnabled(true);
       toast.success('Biometric authentication enabled successfully!');
       
     } catch (error) {
-      console.error('Biometric setup failed:', error);
-      
       let errorMessage = 'Failed to setup biometric authentication';
       
       if (error.name === 'NotAllowedError') {
@@ -272,7 +264,6 @@ const LoginMasterKey = ({ onLoginSuccess }) => {
       navigate('/');
       
     } catch (error) {
-      console.error('Biometric authentication failed:', error);
       let errorMessage = 'Biometric authentication failed. Please use your master key instead.';
       if (error.name === 'NotAllowedError') {
         errorMessage = 'Biometric authentication was cancelled or not allowed. Please try again and make sure to allow the browser to access your biometric data.';
@@ -369,7 +360,6 @@ const LoginMasterKey = ({ onLoginSuccess }) => {
           ...authData,
           masterKey: masterKey // Include the master key in the callback
         }).catch(err => {
-          console.error('Login success callback error:', err);
           // Don't block navigation on callback errors
         });
       }
@@ -380,7 +370,6 @@ const LoginMasterKey = ({ onLoginSuccess }) => {
       // Navigate to dashboard
       navigate('/');
     } catch (error) {
-      console.error('Login completion error:', error);
       toast.error('Failed to complete login');
       setIsLoading(false); // Ensure loading state is cleared on error
     }

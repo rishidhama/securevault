@@ -76,8 +76,6 @@ const BlockchainVerifier = ({ userId, credentials }) => {
       }
 
     } catch (error) {
-      console.error('Verification failed:', error);
-      
       if (error.message.includes('No vault hash found')) {
         toast.error('No blockchain record found for this user');
         setVerificationResult({

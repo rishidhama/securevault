@@ -116,7 +116,6 @@ const BiometricAuth = ({ onAuthenticate, onCancel, isEnabled = false, masterKey 
           }
 
           const result = await response.json();
-          console.log('Server response:', result);
         } else {
           throw new Error('Authentication token required to enable biometric authentication');
         }

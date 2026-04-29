@@ -7,10 +7,7 @@ export const apiRequest = async (endpoint, options = {}) => {
   const baseUrl = API_BASE_URL.endsWith('/') ? API_BASE_URL.slice(0, -1) : API_BASE_URL;
   const cleanEndpoint = endpoint.startsWith('/') ? endpoint : `/${endpoint}`;
   const url = `${baseUrl}${cleanEndpoint}`;
-  
-  if (process.env.NODE_ENV === 'development') {
-    console.log('API Request:', { baseUrl, cleanEndpoint, url });
-  }
+
   
   const token = localStorage.getItem('securevault_token');
   
