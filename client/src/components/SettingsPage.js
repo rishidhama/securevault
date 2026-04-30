@@ -1220,8 +1220,64 @@ const SettingsPage = ({ user, masterKey, onLogout, credentials, decryptPassword 
               </div>
 
               {/* Plans */}
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                {[{id:'free',name:'Free',price:'$0',period:'/mo',features:['Unlimited local entries','Client-side encryption','Basic breach monitor','Manual backup/export']},{id:'pro',name:'Pro',price:'$4.99',period:'/mo',highlighted:true,features:['Everything in Free','Cloud backup sync','Advanced breach monitor','Priority support']},{id:'team',name:'Team',price:'$9.99',period:'/mo',features:['Everything in Pro','Multi-user vault','Team roles & permissions','Audit logs']}].map(plan => (
+              <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
+                {[
+                  {
+                    id: 'free',
+                    name: 'Free',
+                    subtitle: 'For privacy-conscious individuals.',
+                    price: '$0',
+                    period: '',
+                    features: [
+                      'Unlimited passwords & cross-device sync',
+                      'End-to-end client-side encryption',
+                      'Note: Relies on server trust (No L2 Anchoring)'
+                    ]
+                  },
+                  {
+                    id: 'premium',
+                    name: 'Premium (The USP Tier)',
+                    subtitle: 'For crypto-natives and developers who demand proof.',
+                    price: '$2.99',
+                    period: '/ month',
+                    billingNote: '(Billed annually)',
+                    highlighted: true,
+                    features: [
+                      'Everything in Free, plus:',
+                      'Continuous L2 Integrity Anchoring (Cryptographic proof against server rollbacks)',
+                      'Advanced WebAuthn / Hardware Key Support',
+                      'Priority breach monitoring'
+                    ]
+                  },
+                  {
+                    id: 'teams',
+                    name: 'Teams',
+                    subtitle: 'For small agencies and startups.',
+                    price: '$4.99',
+                    period: '/ user / month',
+                    billingNote: '(Billed annually)',
+                    features: [
+                      'Everything in Premium, plus:',
+                      'Shared vaults and secure credential sharing',
+                      'Basic role-based access control (RBAC)',
+                      'Admin dashboard for user management'
+                    ]
+                  },
+                  {
+                    id: 'enterprise',
+                    name: 'Enterprise',
+                    subtitle: 'For organizations requiring strict IT compliance.',
+                    price: '$7.99',
+                    period: '/ user / month',
+                    billingNote: '(Billed annually)',
+                    features: [
+                      'Everything in Teams, plus:',
+                      'Cryptographic Audit Logs (Provable compliance for GDPR/DPDP)',
+                      'Integrations for Okta, Entra ID, and SAML SSO',
+                      'Dedicated deployment support'
+                    ]
+                  }
+                ].map(plan => (
                   <div key={plan.id} className={`bg-white dark:bg-gray-800 border rounded-xl p-6 ${plan.highlighted ? 'border-blue-500 ring-1 ring-blue-500' : 'border-secondary-200 dark:border-gray-700'}`}>
                     <div className="flex items-center justify-between mb-2">
                       <h4 className="text-lg font-semibold text-secondary-900 dark:text-white">{plan.name}</h4>
@@ -1229,7 +1285,14 @@ const SettingsPage = ({ user, masterKey, onLogout, credentials, decryptPassword 
                         <span className="text-xs px-2 py-1 rounded-full bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300">Popular</span>
                       )}
                     </div>
-                    <div className="text-3xl font-bold text-secondary-900 dark:text-white">{plan.price}<span className="text-base font-medium text-secondary-600 dark:text-gray-300">{plan.period}</span></div>
+                    <p className="text-sm text-secondary-600 dark:text-gray-300 mb-2">{plan.subtitle}</p>
+                    <div className="text-3xl font-bold text-secondary-900 dark:text-white">
+                      {plan.price}
+                      <span className="text-base font-medium text-secondary-600 dark:text-gray-300">{plan.period}</span>
+                    </div>
+                    {plan.billingNote && (
+                      <p className="text-xs text-secondary-500 dark:text-gray-400 mt-1">{plan.billingNote}</p>
+                    )}
                     <ul className="mt-4 space-y-2">
                       {plan.features.map((f, i) => (
                         <li key={i} className="flex items-center gap-2 text-secondary-700 dark:text-gray-300">

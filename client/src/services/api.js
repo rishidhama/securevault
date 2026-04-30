@@ -195,10 +195,6 @@ export const blockchainAPI = {
   history: (userId) => apiRequest(`/api/blockchain/history/${encodeURIComponent(userId)}`),
   activity: (userId) => apiRequest(`/api/blockchain/activity/${encodeURIComponent(userId)}`),
   operations: (userId) => apiRequest(`/api/blockchain/operations/${encodeURIComponent(userId)}`),
-  flushMyBatchQueue: () => apiRequest('/api/blockchain/batch/flush', {
-    method: 'POST',
-    body: JSON.stringify({})
-  }),
   verify: (userId, payload) => apiRequest('/api/blockchain/verify', {
     method: 'POST',
     body: JSON.stringify({ userId, ...payload })
