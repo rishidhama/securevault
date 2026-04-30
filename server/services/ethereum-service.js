@@ -22,6 +22,8 @@ class VaultChain {
     this.networkInfoCache = null;
     this.networkInfoCacheAt = 0;
     this.networkInfoCacheTtlMs = Number(process.env.NETWORK_INFO_CACHE_TTL_MS || 15000);
+    this.txQueue = Promise.resolve();
+    this.nextNonce = null;
   }
 
   hashUserId(userId) {
@@ -171,7 +173,7 @@ class VaultChain {
     }
   }
 
-  async storeVaultHash(userId, vaultHash) {
+  async storeVaultHash(userId, vaultHash, meta = {}) {
     if (!this.initialized) {
       throw new Error('Ethereum service not initialized');
     }
@@ -216,9 +218,12 @@ class VaultChain {
         gasLimit = this.contractVersion === 'l2' ? 100000 : 300000;
       }
       
-      const tx = await this.contract.updateVaultHash(userIdParam, vaultHashParam, {
-        gasLimit: gasLimit
-      });
+      const tx = await this.enqueueTransaction(async () => this.sendWithManagedNonce((nonce) =>
+        this.contract.updateVaultHash(userIdParam, vaultHashParam, {
+          gasLimit: gasLimit,
+          nonce
+        })
+      ));
       
       console.log(`Transaction sent: ${tx.hash}`);
       
@@ -231,6 +236,8 @@ class VaultChain {
       try {
         const anchorEntry = {
           op: 'anchor',
+          mode: meta.mode || 'single',
+          usersInBatch: Number.isFinite(meta.usersInBatch) && meta.usersInBatch > 0 ? meta.usersInBatch : 1,
           userId,
           contractVersion: this.contractVersion,
           network: networkName,
@@ -301,9 +308,12 @@ class VaultChain {
         gasLimit = 50000 + (updates.length * 50000);
       }
       
-      const tx = await this.contract.batchUpdateVaultHash(userIdHashes, vaultHashes, {
-        gasLimit: gasLimit
-      });
+      const tx = await this.enqueueTransaction(async () => this.sendWithManagedNonce((nonce) =>
+        this.contract.batchUpdateVaultHash(userIdHashes, vaultHashes, {
+          gasLimit: gasLimit,
+          nonce
+        })
+      ));
       
       console.log(`Batch transaction sent: ${tx.hash}`);
       
@@ -311,6 +321,28 @@ class VaultChain {
       const confirmTs = Date.now();
       console.log(`Batch transaction confirmed in block ${receipt.blockNumber}`);
       const block = await this.provider.getBlock(receipt.blockNumber);
+
+      // Structured log for benchmarking batch anchoring latency and gas usage
+      try {
+        const anchorEntry = {
+          op: 'anchor',
+          mode: 'batch',
+          usersInBatch: updates.length,
+          contractVersion: this.contractVersion,
+          network: networkName,
+          txHash: tx.hash,
+          submitTs,
+          confirmTs,
+          latencyMs: confirmTs - submitTs,
+          blockNumber: receipt.blockNumber,
+          gasUsed: receipt.gasUsed ? receipt.gasUsed.toString() : null,
+          gasPriceWei: receipt.effectiveGasPrice ? receipt.effectiveGasPrice.toString() : null
+        };
+        // eslint-disable-next-line no-console
+        console.log(JSON.stringify(anchorEntry));
+      } catch (e) {
+        // ignore logging errors
+      }
 
       return {
         success: true,
@@ -424,6 +456,49 @@ class VaultChain {
     } catch (error) {
       console.error('Failed to get transaction history:', error.message);
       return [];
+    }
+  }
+
+  enqueueTransaction(task) {
+    const run = this.txQueue.then(task, task);
+    this.txQueue = run.catch(() => {});
+    return run;
+  }
+
+  async getNextNonce() {
+    if (this.nextNonce === null) {
+      this.nextNonce = await this.wallet.getTransactionCount('pending');
+    }
+    const nonce = this.nextNonce;
+    this.nextNonce += 1;
+    return nonce;
+  }
+
+  isNonceError(error) {
+    if (!error) return false;
+    if (error.code === 'NONCE_EXPIRED') return true;
+    const message = String(error.message || '').toLowerCase();
+    return (
+      message.includes('nonce too low') ||
+      message.includes('nonce has already been used')
+    );
+  }
+
+  async sendWithManagedNonce(sendFn) {
+    const trySend = async () => {
+      const nonce = await this.getNextNonce();
+      return sendFn(nonce);
+    };
+
+    try {
+      return await trySend();
+    } catch (error) {
+      if (!this.isNonceError(error)) {
+        throw error;
+      }
+      // Resync nonce from network and retry once.
+      this.nextNonce = await this.wallet.getTransactionCount('pending');
+      return trySend();
     }
   }
 }

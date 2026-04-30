@@ -88,7 +88,6 @@ class BatchQueue {
 
   async flushDueUsers(opts = {}) {
     const now = Date.now();
-    const contractVersion = process.env.CONTRACT_VERSION || 'legacy';
     const dueStates = [];
 
     for (const s of this.pending.values()) {
@@ -100,39 +99,8 @@ class BatchQueue {
 
     dueStates.sort((a, b) => (a.firstPendingAt || 0) - (b.firstPendingAt || 0));
     const slice = dueStates.slice(0, Math.max(1, this.maxUpdates));
-
-    if (contractVersion === 'l2' && slice.length > 1) {
-      const updates = slice.map(s => ({ userId: s.userId, vaultHash: s.latestVaultHash }));
-      try {
-        const result = await ethereumService.batchStoreVaultHash(updates);
-        if (!result.success) throw new Error(result.error || 'Batch update failed');
-
-        for (const s of slice) {
-          this._markFlushed(s.userId);
-          if (result.txHash) {
-            // Mark persisted queued operations as anchored for UI visibility.
-            // Anchor only entries matching the hash we just wrote on-chain.
-            // eslint-disable-next-line no-await-in-loop
-            await blockchainDecoder.markAnchoredForUser(s.userId, {
-              txHash: result.txHash,
-              blockNumber: result.blockNumber,
-              vaultHash: s.latestVaultHash,
-              anchoredAt: result.blockTimestamp ? new Date(result.blockTimestamp * 1000) : undefined
-            });
-          }
-        }
-        this.stats.totalBatched += slice.length;
-        console.log(`Batch update: ${slice.length} users, tx: ${result.txHash}`);
-        return { success: true, flushed: slice.length, mode: 'batch', txHash: result.txHash };
-      } catch (error) {
-        console.error('Batch update failed:', error.message);
-        await this._flushIndividually(slice);
-        return { success: false, flushed: slice.length, mode: 'fallback_individual', error: error.message };
-      }
-    }
-
     await this._flushIndividually(slice);
-    return { success: true, flushed: slice.length, mode: 'individual' };
+    return { success: true, flushed: slice.length, mode: 'per_user' };
   }
 
   _markFlushed(userId) {
@@ -147,9 +115,14 @@ class BatchQueue {
   async _flushIndividually(states) {
     const promises = states.map(async (s) => {
       try {
-        const r = await ethereumService.storeVaultHash(s.userId, s.latestVaultHash);
+        const updatesCoalesced = Math.max(1, s.pendingCount || 1);
+        const r = await ethereumService.storeVaultHash(s.userId, s.latestVaultHash, {
+          mode: 'per_user_batch',
+          usersInBatch: updatesCoalesced
+        });
         if (r && r.success) {
           this.stats.totalIndividual += 1;
+          this.stats.totalBatched += updatesCoalesced;
           this._markFlushed(s.userId);
           if (r.txHash) {
             await blockchainDecoder.markAnchoredForUser(s.userId, {
@@ -175,9 +148,14 @@ class BatchQueue {
     const s = this.pending.get(userId);
     if (!s || !s.pendingCount) return { success: true, flushed: 0 };
     try {
-      const r = await ethereumService.storeVaultHash(userId, s.latestVaultHash);
+      const updatesCoalesced = Math.max(1, s.pendingCount || 1);
+      const r = await ethereumService.storeVaultHash(userId, s.latestVaultHash, {
+        mode: 'per_user_batch',
+        usersInBatch: updatesCoalesced
+      });
       if (r && r.success) {
         this.stats.totalIndividual += 1;
+        this.stats.totalBatched += updatesCoalesced;
         this._markFlushed(userId);
         if (r.txHash) {
           await blockchainDecoder.markAnchoredForUser(userId, {

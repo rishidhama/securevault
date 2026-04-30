@@ -110,6 +110,7 @@ function randomString(len) {
 }
 
 async function createCredential(token) {
+  const merkleRoot = crypto.randomBytes(32).toString('hex');
   const body = {
     title: `Bench ${Date.now()}`,
     username: `bench-${randomString(6)}@bench.com`,
@@ -120,7 +121,8 @@ async function createCredential(token) {
     notes: '',
     category: 'BenchmarkWrite',
     tags: ['bench'],
-    isFavorite: false
+    isFavorite: false,
+    merkleRoot
   };
 
   const res = await fetch(`${BASE_URL}/api/credentials`, {

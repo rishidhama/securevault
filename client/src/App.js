@@ -30,6 +30,26 @@ import IncrementalMerkleTree from './utils/incremental-merkle';
 import './index.css';
 
 const EMPTY_VAULT_ROOT = '0'.repeat(64);
+const INITIAL_CREDENTIALS_LIMIT = 100;
+const INITIAL_DECRYPT_WARM_COUNT = 20;
+
+const runAfterFirstPaint = (fn) => {
+  setTimeout(() => {
+    if (typeof window !== 'undefined' && typeof window.requestAnimationFrame === 'function') {
+      window.requestAnimationFrame(() => fn());
+      return;
+    }
+    fn();
+  }, 0);
+};
+
+const runInIdle = (fn) => {
+  if (typeof window !== 'undefined' && typeof window.requestIdleCallback === 'function') {
+    window.requestIdleCallback(fn, { timeout: 1500 });
+    return;
+  }
+  setTimeout(fn, 0);
+};
 
 function Breadcrumbs() {
   const location = useLocation();
@@ -68,6 +88,24 @@ function App() {
   const [showAnchorResumeModal, setShowAnchorResumeModal] = useState(false);
   const [isAnchoringQueued, setIsAnchoringQueued] = useState(false);
   const [merkleTree] = useState(() => new IncrementalMerkleTree());
+
+  const warmDecryptCacheIncremental = async (creds, key) => {
+    if (!key || !Array.isArray(creds) || creds.length === 0) return;
+
+    const firstChunk = creds.slice(0, INITIAL_DECRYPT_WARM_COUNT);
+    const remainder = creds.slice(INITIAL_DECRYPT_WARM_COUNT);
+
+    try {
+      await encryptionService.warmDecryptCache(firstChunk, key);
+    } catch {
+      // Non-blocking: keep UI responsive even if initial warm fails.
+    }
+
+    if (!remainder.length) return;
+    runInIdle(() => {
+      encryptionService.warmDecryptCache(remainder, key).catch(() => {});
+    });
+  };
 
   useEffect(() => {
     checkAuthStatus();
@@ -223,7 +261,9 @@ function App() {
 
   useEffect(() => {
     if (isAuthenticated && user) {
-      checkPendingAnchors(user);
+      runAfterFirstPaint(() => {
+        checkPendingAnchors(user);
+      });
     }
   }, [isAuthenticated, user]);
 
@@ -231,7 +271,7 @@ function App() {
   // This prevents "Decryption not ready" during rerenders (e.g. toggling favorites).
   useEffect(() => {
     if (!masterKey || !Array.isArray(credentials) || credentials.length === 0) return;
-    encryptionService.warmDecryptCache(credentials, masterKey).catch(() => {});
+    warmDecryptCacheIncremental(credentials, masterKey).catch(() => {});
   }, [masterKey, credentials]);
 
   const loadData = async () => {
@@ -244,28 +284,37 @@ function App() {
         setTimeout(() => reject(new Error('Data loading timeout')), 10000)
       );
       
-      const dataPromise = Promise.all([
-        credentialsAPI.listAll(), // Get all credentials for initial load
-        credentialsAPI.stats(),
-        credentialsAPI.categories()
-      ]);
+      const dataPromise = credentialsAPI.list({ page: 1, limit: INITIAL_CREDENTIALS_LIMIT });
 
-      const [credentialsResponse, statsResponse, categoriesResponse] = await Promise.race([
+      const credentialsResponse = await Promise.race([
         dataPromise,
         timeoutPromise
       ]);
 
       const creds = credentialsResponse.data || credentialsResponse || [];
       setCredentials(creds);
-      setStats(statsResponse.data || statsResponse || { total: 0, favorites: 0, categories: 0 });
-      setCategories(categoriesResponse.data || categoriesResponse || []);
+      setStats({ total: 0, favorites: 0, categories: 0 });
+      setCategories([]);
+
+      runAfterFirstPaint(async () => {
+        try {
+          const [statsResponse, categoriesResponse] = await Promise.all([
+            credentialsAPI.stats(),
+            credentialsAPI.categories()
+          ]);
+          setStats(statsResponse.data || statsResponse || { total: 0, favorites: 0, categories: 0 });
+          setCategories(categoriesResponse.data || categoriesResponse || []);
+        } catch {
+          // Non-blocking: leave optimistic defaults on secondary data failure.
+        }
+      });
 
       if (creds.length > 0) {
         await merkleTree.initFromCredentials(creds);
       }
 
       if (masterKey) {
-        encryptionService.warmDecryptCache(creds, masterKey).catch(() => {});
+        warmDecryptCacheIncremental(creds, masterKey).catch(() => {});
       }
     } catch (error) {
       setCredentials([]);
@@ -315,17 +364,23 @@ function App() {
           const fullUserData = { ...authData.user, ...profileResponse.data.user };
           setUser(fullUserData);
           localStorage.setItem('securevault_user', JSON.stringify(fullUserData));
-          await checkPendingAnchors(fullUserData);
+          runAfterFirstPaint(() => {
+            checkPendingAnchors(fullUserData);
+          });
         }
       } catch (error) {
         // If profile fetch fails or times out, continue with login data
-        await checkPendingAnchors(authData.user);
+        runAfterFirstPaint(() => {
+          checkPendingAnchors(authData.user);
+        });
       }
     } catch (error) {
       setUser(authData.user);
       setMasterKey(authData.masterKey || '');
       setIsAuthenticated(true);
-      await checkPendingAnchors(authData.user);
+      runAfterFirstPaint(() => {
+        checkPendingAnchors(authData.user);
+      });
     }
   };
 

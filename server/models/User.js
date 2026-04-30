@@ -88,7 +88,7 @@ userSchema.pre('save', async function(next) {
   if (this.isModified('masterKeyHash')) {
     const serverSalt = process.env.SERVER_SALT || 'securevault-server-salt-2025';
     const saltedKey = this.masterKeyHash + serverSalt;
-    this.masterKeyHash = await bcrypt.hash(saltedKey, 12);
+    this.masterKeyHash = await bcrypt.hash(saltedKey, 11);
   }
   next();
 });

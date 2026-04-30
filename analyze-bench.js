@@ -16,6 +16,11 @@ function p95(arr) {
   return a[idx];
 }
 
+function pctChange(base, current) {
+  if (!base || !Number.isFinite(base)) return 0;
+  return ((base - current) / base) * 100;
+}
+
 function analyzeClient(clientPath) {
   const raw = fs.readFileSync(clientPath, 'utf8');
   const data = JSON.parse(raw);
@@ -335,6 +340,113 @@ function analyzeAnchor(serverPath) {
   }
 }
 
+function analyzeAnchorByBatch(serverPath) {
+  let content;
+  try {
+    const buffer = fs.readFileSync(serverPath);
+    if (buffer.length >= 2 && buffer[0] === 0xFF && buffer[1] === 0xFE) {
+      content = buffer.toString('utf16le').slice(1);
+    } else {
+      content = buffer.toString('utf8');
+      if (content.charCodeAt(0) === 0xFEFF) {
+        content = content.slice(1);
+      }
+    }
+  } catch (e) {
+    content = fs.readFileSync(serverPath, 'utf8');
+  }
+
+  const lines = content.split(/\r?\n/);
+  const byBatch = new Map();
+
+  lines.forEach((line) => {
+    const trimmed = line.trim();
+    if (!trimmed.startsWith('{')) return;
+    let d;
+    try {
+      d = JSON.parse(trimmed);
+    } catch (e) {
+      return;
+    }
+    if (d.op !== 'anchor') return;
+
+    const batchSize =
+      Number.isFinite(d.usersInBatch) && d.usersInBatch > 0
+        ? d.usersInBatch
+        : 1;
+
+    if (!byBatch.has(batchSize)) {
+      byBatch.set(batchSize, {
+        txLatencies: [],
+        gasPerUpdate: [],
+        latencyPerUpdate: [],
+      });
+    }
+    const bucket = byBatch.get(batchSize);
+
+    if (typeof d.latencyMs === 'number') {
+      bucket.txLatencies.push(d.latencyMs);
+      bucket.latencyPerUpdate.push(d.latencyMs / batchSize);
+    }
+
+    if (typeof d.gasUsed === 'string') {
+      const g = parseInt(d.gasUsed, 10);
+      if (!Number.isNaN(g)) {
+        bucket.gasPerUpdate.push(g / batchSize);
+      }
+    }
+  });
+
+  const rows = Array.from(byBatch.entries())
+    .map(([batchSize, bucket]) => ({
+      batchSize,
+      txCount: bucket.txLatencies.length || bucket.gasPerUpdate.length,
+      gasUpdateMed: median(bucket.gasPerUpdate),
+      gasUpdateP95: p95(bucket.gasPerUpdate),
+      latUpdateMed: median(bucket.latencyPerUpdate),
+      latUpdateP95: p95(bucket.latencyPerUpdate),
+      txLatMed: median(bucket.txLatencies),
+      txLatP95: p95(bucket.txLatencies),
+    }))
+    .sort((a, b) => a.batchSize - b.batchSize);
+
+  console.log('\n=== Batch-size anchoring matrix ===');
+  if (!rows.length) {
+    console.log('No anchor entries found in server log.');
+    return;
+  }
+
+  const base = rows.find((r) => r.batchSize === 1) || rows[0];
+
+  console.log(
+    'Batch Size | Tx Count | Gas/Update Med | Gas/Update p95 | Gas Savings Med% | Gas Savings p95% | Latency/Update Med (ms) | Latency/Update p95 (ms) | Latency Improvement Med% | Latency Improvement p95% | Tx Latency Med (ms) | Tx Latency p95 (ms)',
+  );
+
+  rows.forEach((r) => {
+    const gasSavingsMed = pctChange(base.gasUpdateMed, r.gasUpdateMed);
+    const gasSavingsP95 = pctChange(base.gasUpdateP95, r.gasUpdateP95);
+    const latImproveMed = pctChange(base.latUpdateMed, r.latUpdateMed);
+    const latImproveP95 = pctChange(base.latUpdateP95, r.latUpdateP95);
+
+    console.log(
+      [
+        r.batchSize,
+        r.txCount,
+        r.gasUpdateMed.toFixed(2),
+        r.gasUpdateP95.toFixed(2),
+        gasSavingsMed.toFixed(2),
+        gasSavingsP95.toFixed(2),
+        r.latUpdateMed.toFixed(2),
+        r.latUpdateP95.toFixed(2),
+        latImproveMed.toFixed(2),
+        latImproveP95.toFixed(2),
+        r.txLatMed.toFixed(2),
+        r.txLatP95.toFixed(2),
+      ].join(' | '),
+    );
+  });
+}
+
 if (process.argv.length < 4) {
   // eslint-disable-next-line no-console
   console.error('Usage: node analyze-bench.js <securevault-bench-client.json> <server.log>');
@@ -347,5 +459,6 @@ const serverPath = process.argv[3];
 analyzeClient(clientPath);
 analyzeServer(serverPath);
 analyzeAnchor(serverPath);
+analyzeAnchorByBatch(serverPath);
 
 
