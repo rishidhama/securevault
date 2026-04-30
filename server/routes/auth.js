@@ -58,6 +58,30 @@ const generateToken = (userId) => {
   );
 };
 
+const deriveWebAuthnRpId = (req) => {
+  const origin = req.get('origin');
+  if (origin) {
+    try {
+      const originHost = new URL(origin).hostname;
+      if (originHost) return originHost;
+    } catch (e) {
+      // Ignore malformed origin and continue with fallbacks.
+    }
+  }
+
+  const forwardedHost = req.get('x-forwarded-host');
+  if (forwardedHost) {
+    return forwardedHost.split(',')[0].trim().split(':')[0];
+  }
+
+  const hostHeader = req.get('host');
+  if (hostHeader) {
+    return hostHeader.split(':')[0];
+  }
+
+  return 'localhost';
+};
+
 const authenticateToken = (req, res, next) => {
   const authHeader = req.headers['authorization'];
   const token = authHeader && authHeader.split(' ')[1];
@@ -279,7 +303,7 @@ router.post('/biometric-challenge', [
 
     const responseData = {
       challenge: Array.from(challenge),
-      rpId: req.hostname || 'localhost',
+      rpId: deriveWebAuthnRpId(req),
       userVerification: 'required',
       timeout: 60000,
       allowCredentials: user.biometricCredential ? [{
