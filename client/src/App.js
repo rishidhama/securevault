@@ -84,9 +84,6 @@ function App() {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('all');
   const [showFavorites, setShowFavorites] = useState(false);
-  const [pendingAnchorCount, setPendingAnchorCount] = useState(0);
-  const [showAnchorResumeModal, setShowAnchorResumeModal] = useState(false);
-  const [isAnchoringQueued, setIsAnchoringQueued] = useState(false);
   const [merkleTree] = useState(() => new IncrementalMerkleTree());
 
   const warmDecryptCacheIncremental = async (creds, key) => {
@@ -209,48 +206,6 @@ function App() {
     setUser(null);
     setMasterKey('');
     setIsAuthenticated(false);
-    setPendingAnchorCount(0);
-    setShowAnchorResumeModal(false);
-  };
-
-  const getCurrentUserId = (u) => (u?.id || u?._id || null);
-
-  const checkPendingAnchors = async (u) => {
-    const userId = getCurrentUserId(u);
-    if (!userId) return;
-    try {
-      const res = await blockchainAPI.operations(userId);
-      const queued = res?.data?.queued || [];
-      const count = Array.isArray(queued) ? queued.length : 0;
-      setPendingAnchorCount(count);
-      setShowAnchorResumeModal(count > 0);
-    } catch {
-      // Non-blocking: if blockchain endpoint fails, skip modal.
-      setPendingAnchorCount(0);
-      setShowAnchorResumeModal(false);
-    }
-  };
-
-  const handleAnchorQueuedNow = async () => {
-    try {
-      setIsAnchoringQueued(true);
-      const res = await blockchainAPI.flushMyBatchQueue();
-      if (res?.data?.txHash) {
-        toast.success('Queued updates anchored successfully.');
-      } else if (res?.data?.flushed > 0) {
-        toast.success('Queued updates processed.');
-      } else {
-        toast('No queued updates to anchor right now.');
-      }
-      setShowAnchorResumeModal(false);
-      if (user) {
-        await checkPendingAnchors(user);
-      }
-    } catch (error) {
-      toast.error(`Failed to anchor queued updates: ${error.message || error}`);
-    } finally {
-      setIsAnchoringQueued(false);
-    }
   };
 
   useEffect(() => {
@@ -258,14 +213,6 @@ function App() {
       loadData();
     }
   }, [isAuthenticated]);
-
-  useEffect(() => {
-    if (isAuthenticated && user) {
-      runAfterFirstPaint(() => {
-        checkPendingAnchors(user);
-      });
-    }
-  }, [isAuthenticated, user]);
 
   // Keep decrypt cache warm whenever we have both masterKey + credentials.
   // This prevents "Decryption not ready" during rerenders (e.g. toggling favorites).
@@ -364,23 +311,14 @@ function App() {
           const fullUserData = { ...authData.user, ...profileResponse.data.user };
           setUser(fullUserData);
           localStorage.setItem('securevault_user', JSON.stringify(fullUserData));
-          runAfterFirstPaint(() => {
-            checkPendingAnchors(fullUserData);
-          });
         }
       } catch (error) {
         // If profile fetch fails or times out, continue with login data
-        runAfterFirstPaint(() => {
-          checkPendingAnchors(authData.user);
-        });
       }
     } catch (error) {
       setUser(authData.user);
       setMasterKey(authData.masterKey || '');
       setIsAuthenticated(true);
-      runAfterFirstPaint(() => {
-        checkPendingAnchors(authData.user);
-      });
     }
   };
 
@@ -594,35 +532,6 @@ function App() {
   return (
     <Router>
       <div className="h-screen overflow-hidden bg-secondary-50">
-        {showAnchorResumeModal && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-            <div className="w-full max-w-md rounded-lg bg-white p-6 shadow-xl">
-              <h3 className="text-lg font-semibold text-secondary-900">Pending Batch Anchoring</h3>
-              <p className="mt-2 text-sm text-secondary-700">
-                You have {pendingAnchorCount} queued update{pendingAnchorCount === 1 ? '' : 's'} from a previous session.
-                Anchor them now?
-              </p>
-              <div className="mt-5 flex justify-end gap-2">
-                <button
-                  type="button"
-                  className="btn-secondary"
-                  onClick={() => setShowAnchorResumeModal(false)}
-                  disabled={isAnchoringQueued}
-                >
-                  Later
-                </button>
-                <button
-                  type="button"
-                  className="btn-primary"
-                  onClick={handleAnchorQueuedNow}
-                  disabled={isAnchoringQueued}
-                >
-                  {isAnchoringQueued ? 'Anchoring...' : 'Anchor now'}
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
         <div className="flex h-full min-h-0">
           <Sidebar onLogout={handleLogout} />
           <main className="flex-1 min-h-0 overflow-y-auto p-4 pt-16 sm:p-6 sm:pt-16 lg:p-8 lg:pt-8">
