@@ -265,6 +265,8 @@ function App() {
         ...(selectedCategory !== 'all' ? { category: selectedCategory } : {}),
         ...(showFavorites ? { favorite: 'true' } : {})
       });
+      const statsPromise = credentialsAPI.stats().catch(() => null);
+      const categoriesPromise = credentialsAPI.categories().catch(() => null);
 
       const credentialsResponse = await Promise.race([
         dataPromise,
@@ -282,20 +284,30 @@ function App() {
         hasNextPage: !!responsePagination.hasNextPage,
         hasPrevPage: !!responsePagination.hasPrevPage
       });
-      setStats({ total: 0, favorites: 0, categories: 0 });
-      setCategories([]);
+      const derivedTotal = typeof responsePagination.total === 'number' ? responsePagination.total : creds.length;
+      const isUnfilteredBaseView = !debouncedSearchTerm && selectedCategory === 'all' && !showFavorites;
+      const hasCompleteCredentialSet = isUnfilteredBaseView && derivedTotal <= creds.length;
+      setStats((prev) => ({
+        ...prev,
+        total: derivedTotal,
+        ...(hasCompleteCredentialSet
+          ? {
+              favorites: creds.filter((cred) => !!cred.isFavorite).length,
+              categories: new Set(creds.map((cred) => cred.category).filter(Boolean)).size
+            }
+          : {})
+      }));
+      if (hasCompleteCredentialSet) {
+        setCategories(Array.from(new Set(creds.map((cred) => cred.category).filter(Boolean))));
+      }
 
-      runAfterFirstPaint(async () => {
-        try {
-          const [statsResponse, categoriesResponse] = await Promise.all([
-            credentialsAPI.stats(),
-            credentialsAPI.categories()
-          ]);
-          setStats(statsResponse.data || statsResponse || { total: 0, favorites: 0, categories: 0 });
-          setCategories(categoriesResponse.data || categoriesResponse || []);
-        } catch {
-          // Non-blocking: leave optimistic defaults on secondary data failure.
-        }
+      statsPromise.then((statsResponse) => {
+        if (!statsResponse) return;
+        setStats(statsResponse.data || statsResponse || { total: derivedTotal, favorites: 0, categories: 0 });
+      });
+      categoriesPromise.then((categoriesResponse) => {
+        if (!categoriesResponse) return;
+        setCategories(categoriesResponse.data || categoriesResponse || []);
       });
 
       if (creds.length > 0) {
