@@ -37,14 +37,30 @@ const Dashboard = ({
   setSelectedCategory,
   showFavorites,
   setShowFavorites,
-  user
+  user,
+  currentPage,
+  pagination,
+  isPageLoading,
+  onPageChange,
+  pageSize,
+  onPageSizeChange
 }) => {
   const [showPasswords, setShowPasswords] = useState({});
   const [showFilters, setShowFilters] = useState(false);
   const [breachMap, setBreachMap] = useState({});
   const [isCheckingBreaches, setIsCheckingBreaches] = useState(false);
+  const [pageInput, setPageInput] = useState(String(currentPage || 1));
   const location = useLocation();
   const navigate = useNavigate();
+  const totalPages = pagination?.totalPages || 1;
+  const currentResolvedPage = pagination?.page || currentPage || 1;
+  const totalItems = Number.isFinite(pagination?.total) ? pagination.total : credentials.length;
+  const rangeStart = totalItems > 0 ? (currentResolvedPage - 1) * (pagination?.limit || pageSize || 1) + 1 : 0;
+  const rangeEnd = totalItems > 0 ? Math.min(totalItems, rangeStart + credentials.length - 1) : 0;
+
+  useEffect(() => {
+    setPageInput(String(currentResolvedPage));
+  }, [currentResolvedPage]);
 
   useEffect(() => {
     let isMounted = true;
@@ -108,6 +124,17 @@ const Dashboard = ({
     } catch (error) {
       toast.error('Failed to update favorite status');
     }
+  };
+
+  const handlePageJump = () => {
+    const parsedPage = parseInt(pageInput, 10);
+    if (!Number.isFinite(parsedPage)) {
+      setPageInput(String(currentResolvedPage));
+      return;
+    }
+    const targetPage = Math.min(Math.max(parsedPage, 1), totalPages);
+    onPageChange(targetPage);
+    setPageInput(String(targetPage));
   };
 
 
@@ -244,6 +271,9 @@ const Dashboard = ({
 
         {/* Credentials List */}
         <div className="space-y-4">
+          {isPageLoading && (
+            <div className="text-sm text-secondary-500">Loading page {currentPage}...</div>
+          )}
           {credentials.length === 0 ? (
             <div className="card text-center py-12">
               <Shield className="w-12 h-12 text-secondary-400 mx-auto mb-4" />
@@ -425,6 +455,77 @@ const Dashboard = ({
               ))}
             </div>
           )}
+        </div>
+
+        <div className="mt-2 border-t border-secondary-200 pt-4">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div className="text-sm text-secondary-600">
+              <span className="font-medium text-secondary-900">{rangeStart}-{rangeEnd}</span>
+              <span> of {totalItems.toLocaleString()} credentials</span>
+              <span className="mx-2 text-secondary-400">|</span>
+              <span>Page {currentResolvedPage} of {totalPages}</span>
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
+              <select
+                className="input h-9 w-20 py-1 text-sm"
+                value={pageSize}
+                disabled={isPageLoading}
+                onChange={(e) => onPageSizeChange(parseInt(e.target.value, 10))}
+                aria-label="Rows per page"
+                title="Rows per page"
+              >
+                <option value={25}>25</option>
+                <option value={50}>50</option>
+                <option value={100}>100</option>
+                <option value={200}>200</option>
+              </select>
+              <div className="flex items-center gap-1">
+                <input
+                  type="number"
+                  min={1}
+                  max={totalPages}
+                  className="input h-9 w-20 py-1 text-sm"
+                  value={pageInput}
+                  disabled={isPageLoading}
+                  onChange={(e) => setPageInput(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      handlePageJump();
+                    }
+                  }}
+                  aria-label="Jump to page"
+                  placeholder="Page"
+                />
+                <button
+                  type="button"
+                  className="btn-secondary h-9 px-3 py-1"
+                  disabled={isPageLoading}
+                  onClick={handlePageJump}
+                >
+                  Go
+                </button>
+              </div>
+              {isPageLoading && <span className="text-xs text-secondary-500">Loading...</span>}
+            </div>
+          </div>
+          <div className="mt-3 flex items-center justify-end gap-2">
+            <button
+              type="button"
+              className="btn-secondary h-9 px-4 py-1"
+              disabled={!pagination?.hasPrevPage || isPageLoading}
+              onClick={() => onPageChange(Math.max(1, currentResolvedPage - 1))}
+            >
+              Previous
+            </button>
+            <button
+              type="button"
+              className="btn-secondary h-9 px-4 py-1"
+              disabled={!pagination?.hasNextPage || isPageLoading}
+              onClick={() => onPageChange(currentResolvedPage + 1)}
+            >
+              Next
+            </button>
+          </div>
         </div>
       </div>
     </>

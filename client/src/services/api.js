@@ -152,6 +152,7 @@ export const credentialsAPI = {
     if (options.search) params.append('search', options.search);
     if (options.category) params.append('category', options.category);
     if (options.favorite) params.append('favorite', options.favorite);
+    if (options.includeTotal) params.append('includeTotal', options.includeTotal);
     if (options.sortBy) params.append('sortBy', options.sortBy);
     if (options.sortOrder) params.append('sortOrder', options.sortOrder);
     

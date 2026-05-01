@@ -82,8 +82,20 @@ function App() {
   const [stats, setStats] = useState({ total: 0, favorites: 0, categories: 0 });
   const [categories, setCategories] = useState([]);
   const [searchTerm, setSearchTerm] = useState('');
+  const [debouncedSearchTerm, setDebouncedSearchTerm] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('all');
   const [showFavorites, setShowFavorites] = useState(false);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(INITIAL_CREDENTIALS_LIMIT);
+  const [isPageLoading, setIsPageLoading] = useState(false);
+  const [pagination, setPagination] = useState({
+    page: 1,
+    limit: INITIAL_CREDENTIALS_LIMIT,
+    total: 0,
+    totalPages: 1,
+    hasNextPage: false,
+    hasPrevPage: false
+  });
   const [merkleTree] = useState(() => new IncrementalMerkleTree());
 
   const warmDecryptCacheIncremental = async (creds, key) => {
@@ -108,6 +120,13 @@ function App() {
     checkAuthStatus();
     initializeTheme();
   }, []);
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearchTerm(searchTerm);
+    }, 250);
+    return () => clearTimeout(timer);
+  }, [searchTerm]);
 
 
   // Idle-timeout: clear master key and logout after inactivity
@@ -209,10 +228,14 @@ function App() {
   };
 
   useEffect(() => {
-    if (isAuthenticated) {
-      loadData();
-    }
-  }, [isAuthenticated]);
+    if (!isAuthenticated) return;
+    setCurrentPage(1);
+  }, [debouncedSearchTerm, selectedCategory, showFavorites, pageSize, isAuthenticated]);
+
+  useEffect(() => {
+    if (!isAuthenticated) return;
+    loadData(currentPage, { allowInitialLoading: isInitialAuthCheck });
+  }, [isAuthenticated, currentPage, pageSize, debouncedSearchTerm, selectedCategory, showFavorites]);
 
   // Keep decrypt cache warm whenever we have both masterKey + credentials.
   // This prevents "Decryption not ready" during rerenders (e.g. toggling favorites).
@@ -221,17 +244,27 @@ function App() {
     warmDecryptCacheIncremental(credentials, masterKey).catch(() => {});
   }, [masterKey, credentials]);
 
-  const loadData = async () => {
+  const loadData = async (targetPage = 1, opts = {}) => {
+    const { allowInitialLoading = false } = opts;
     try {
-      if (isInitialAuthCheck) {
+      if (allowInitialLoading) {
         setIsLoading(true);
+      } else {
+        setIsPageLoading(true);
       }
       
       const timeoutPromise = new Promise((_, reject) => 
         setTimeout(() => reject(new Error('Data loading timeout')), 10000)
       );
       
-      const dataPromise = credentialsAPI.list({ page: 1, limit: INITIAL_CREDENTIALS_LIMIT });
+      const dataPromise = credentialsAPI.list({
+        page: targetPage,
+        limit: pageSize,
+        includeTotal: 'true',
+        ...(debouncedSearchTerm ? { search: debouncedSearchTerm } : {}),
+        ...(selectedCategory !== 'all' ? { category: selectedCategory } : {}),
+        ...(showFavorites ? { favorite: 'true' } : {})
+      });
 
       const credentialsResponse = await Promise.race([
         dataPromise,
@@ -240,6 +273,15 @@ function App() {
 
       const creds = credentialsResponse.data || credentialsResponse || [];
       setCredentials(creds);
+      const responsePagination = credentialsResponse.pagination || {};
+      setPagination({
+        page: responsePagination.page || targetPage,
+        limit: responsePagination.limit || pageSize,
+        total: typeof responsePagination.total === 'number' ? responsePagination.total : creds.length,
+        totalPages: responsePagination.totalPages || 1,
+        hasNextPage: !!responsePagination.hasNextPage,
+        hasPrevPage: !!responsePagination.hasPrevPage
+      });
       setStats({ total: 0, favorites: 0, categories: 0 });
       setCategories([]);
 
@@ -267,8 +309,17 @@ function App() {
       setCredentials([]);
       setStats({ total: 0, favorites: 0, categories: 0 });
       setCategories([]);
+      setPagination({
+        page: 1,
+        limit: pageSize,
+        total: 0,
+        totalPages: 1,
+        hasNextPage: false,
+        hasPrevPage: false
+      });
     } finally {
       setIsLoading(false);
+      setIsPageLoading(false);
       setIsInitialAuthCheck(false);
     }
   };
@@ -358,6 +409,16 @@ function App() {
       setSearchTerm('');
       setSelectedCategory('all');
       setShowFavorites(false);
+      setCurrentPage(1);
+      setPageSize(INITIAL_CREDENTIALS_LIMIT);
+      setPagination({
+        page: 1,
+        limit: INITIAL_CREDENTIALS_LIMIT,
+        total: 0,
+        totalPages: 1,
+        hasNextPage: false,
+        hasPrevPage: false
+      });
       merkleTree.clear();
     }
   };
@@ -413,6 +474,8 @@ function App() {
       } catch {
         // Non-blocking: local tree sync failure shouldn't interrupt the credential flow.
       }
+      setCurrentPage(1);
+      await loadData(1, { allowInitialLoading: false });
       
       return { credential: newCredentialData, blockchain: response.blockchain || null };
     } catch (error) {
@@ -435,6 +498,7 @@ function App() {
       } catch {
         // Non-blocking: local tree sync failure shouldn't interrupt the deletion flow.
       }
+      await loadData(currentPage, { allowInitialLoading: false });
     } catch (error) {
       throw error;
     }
@@ -460,6 +524,7 @@ function App() {
           favorites: Math.max(0, (prev.favorites || 0) + (nextFavoriteValue ? 1 : -1))
         }));
       }
+      await loadData(currentPage, { allowInitialLoading: false });
     } catch (error) {
       throw error;
     }
@@ -483,6 +548,7 @@ function App() {
       } catch {
         // Non-blocking: local tree sync failure shouldn't interrupt the update flow.
       }
+      await loadData(currentPage, { allowInitialLoading: false });
       return { credential: response.data || response, blockchain: response.blockchain || null };
     } catch (error) {
       throw error;
@@ -496,15 +562,6 @@ function App() {
       return '*** Decryption Failed ***';
     }
   };
-
-  const filteredCredentials = credentials.filter(cred => {
-    const matchesSearch = cred.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         cred.username.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesCategory = selectedCategory === 'all' || cred.category === selectedCategory;
-    const matchesFavorites = !showFavorites || cred.isFavorite;
-    
-    return matchesSearch && matchesCategory && matchesFavorites;
-  });
 
   // Only show loading spinner during initial auth check, not during data loading
   if (isLoading && isInitialAuthCheck) {
@@ -542,14 +599,15 @@ function App() {
         <div className="flex h-full min-h-0">
           <Sidebar onLogout={handleLogout} />
           <main className="flex-1 min-h-0 overflow-y-auto p-4 pt-16 sm:p-6 sm:pt-16 lg:p-8 lg:pt-8">
-          <div className="mx-auto w-full max-w-7xl">
+          <div className="mx-auto flex min-h-full w-full max-w-7xl flex-col">
+          <div className="flex-1">
           <Breadcrumbs />
           <Routes>
             <Route 
               path="/" 
               element={
                 <Dashboard
-                  credentials={filteredCredentials}
+                  credentials={credentials}
                   stats={stats}
                   categories={categories}
                   onAddCredential={handleAddCredential}
@@ -563,6 +621,12 @@ function App() {
                   setSelectedCategory={setSelectedCategory}
                   showFavorites={showFavorites}
                   setShowFavorites={setShowFavorites}
+                  currentPage={currentPage}
+                  pagination={pagination}
+                  isPageLoading={isPageLoading}
+                  onPageChange={setCurrentPage}
+                  pageSize={pageSize}
+                  onPageSizeChange={setPageSize}
                 />
               } 
             />
@@ -591,7 +655,7 @@ function App() {
               path="/vault" 
               element={
                 <Vault
-                  credentials={filteredCredentials}
+                  credentials={credentials}
                   onDeleteCredential={handleDeleteCredential}
                   onToggleFavorite={handleToggleFavorite}
                   decryptPassword={decryptPassword}
@@ -601,6 +665,12 @@ function App() {
                   setSelectedCategory={setSelectedCategory}
                   showFavorites={showFavorites}
                   setShowFavorites={setShowFavorites}
+                  currentPage={currentPage}
+                  pagination={pagination}
+                  isPageLoading={isPageLoading}
+                  onPageChange={setCurrentPage}
+                  pageSize={pageSize}
+                  onPageSizeChange={setPageSize}
                 />
               } 
             />
@@ -645,7 +715,10 @@ function App() {
             />
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
-          <Footer />
+          </div>
+          <div className="mt-8">
+            <Footer />
+          </div>
           </div>
         </main>
         </div>
