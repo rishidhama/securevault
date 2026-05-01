@@ -50,6 +50,7 @@ const normalizeMerkleRoot = (value) => {
   if (!/^[a-fA-F0-9]{64}$/.test(raw)) return null;
   return raw.toLowerCase();
 };
+const blockchainVerboseLogs = process.env.BLOCKCHAIN_VERBOSE_LOGS === 'true';
 
 const BLOCKCHAIN_EVENT_TIMEOUT_MS = Math.max(
   0,
@@ -126,11 +127,13 @@ const createBlockchainEvent = async (userId, action, credentialId, credentialDat
       ...credentialMeta
     };
 
-    console.log(`Blockchain event: ${action} credential ${credentialId}`, {
-      userId,
-      vaultData,
-      credentialData: credentialMeta
-    });
+    if (blockchainVerboseLogs) {
+      console.log(`Blockchain event: ${action} credential ${credentialId}`, {
+        userId,
+        vaultData,
+        credentialData: credentialMeta
+      });
+    }
 
     const vaultHash = normalizeMerkleRoot(merkleRoot);
 
@@ -185,13 +188,15 @@ const createBlockchainEvent = async (userId, action, credentialId, credentialDat
       });
     }
     
-    console.log(`Blockchain event logged: ${action} credential ${credentialId}`, {
-      queued: result.queued || false,
-      pendingCount: typeof result.pendingCount === 'number' ? result.pendingCount : null,
-      txHash: result.txHash || null,
-      etherscanUrl: result.etherscanUrl || null,
-      vaultHash: vaultHash
-    });
+    if (blockchainVerboseLogs) {
+      console.log(`Blockchain event logged: ${action} credential ${credentialId}`, {
+        queued: result.queued || false,
+        pendingCount: typeof result.pendingCount === 'number' ? result.pendingCount : null,
+        txHash: result.txHash || null,
+        etherscanUrl: result.etherscanUrl || null,
+        vaultHash: vaultHash
+      });
+    }
 
     return {
       enabled: true,

@@ -3,6 +3,7 @@
 //   BENCH_READS      - number of paginated GET /api/credentials calls per page size (default: 50)
 //   BENCH_PAGE_LIMITS - comma-separated pagination sizes (default: 10,25,50,100)
 //   BENCH_READS_FULL - number of full-dataset GET /api/credentials?getAll=true calls (default: 10)
+//   BENCH_FULL_WARMUP - perform one unmeasured full read before timing loop (default: true)
 //   BENCH_WRITES     - number of POST /api/credentials calls per user for write tests (default: 10)
 
 
@@ -32,6 +33,7 @@ const PAGE_LIMITS = (process.env.BENCH_PAGE_LIMITS || '10,25,50,100')
   .map((n) => parseInt(n.trim(), 10))
   .filter((n) => Number.isFinite(n) && n > 0);
 const FULL_READ_REQUESTS = parseInt(process.env.BENCH_READS_FULL || '10', 10);
+const FULL_WARMUP = (process.env.BENCH_FULL_WARMUP || 'true').toLowerCase() !== 'false';
 const WRITE_REQUESTS = parseInt(process.env.BENCH_WRITES || '10', 10);
 
 function deriveAuthSecret(email, masterKey) {
@@ -189,6 +191,15 @@ async function benchmarkUser(email) {
     }
 
     if (FULL_READ_REQUESTS > 0) {
+      if (FULL_WARMUP) {
+        console.log(`Warming full dataset path once for ${email} (not counted) ...`);
+        try {
+          // eslint-disable-next-line no-await-in-loop
+          await getCredentials(token, { getAll: true });
+        } catch (err) {
+          console.error(`Full warmup error [${email}]:`, err.message);
+        }
+      }
       console.log(`\n=== Benchmarking full dataset reads for ${email} (${FULL_READ_REQUESTS}x GET /api/credentials?getAll=true) ===`);
       for (let i = 0; i < FULL_READ_REQUESTS; i += 1) {
         try {

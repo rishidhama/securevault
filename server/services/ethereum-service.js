@@ -24,6 +24,14 @@ class VaultChain {
     this.networkInfoCacheTtlMs = Number(process.env.NETWORK_INFO_CACHE_TTL_MS || 15000);
     this.txQueue = Promise.resolve();
     this.nextNonce = null;
+    this.verboseLogs = process.env.BLOCKCHAIN_VERBOSE_LOGS === 'true';
+  }
+
+  debugLog(...args) {
+    if (this.verboseLogs) {
+      // eslint-disable-next-line no-console
+      console.log(...args);
+    }
   }
 
   hashUserId(userId) {
@@ -183,14 +191,14 @@ class VaultChain {
       const network = await this.provider.getNetwork();
       const networkName = network.chainId === 42161 || network.chainId === 421614 ? 'Arbitrum' : 'Sepolia';
       
-      console.log(`Storing vault hash for user ${userId} on ${networkName}...`);
+      this.debugLog(`Storing vault hash for user ${userId} on ${networkName}...`);
       
       // Convert to bytes32 if using L2 contract
       let userIdParam, vaultHashParam;
       if (this.contractVersion === 'l2') {
         userIdParam = this.hashUserId(userId);
         vaultHashParam = this.hexToBytes32(vaultHash);
-        console.log(`Transaction details (L2):`, {
+        this.debugLog(`Transaction details (L2):`, {
           userId,
           userIdHash: userIdParam,
           vaultHash: vaultHash,
@@ -199,7 +207,7 @@ class VaultChain {
       } else {
         userIdParam = userId;
         vaultHashParam = vaultHash;
-        console.log(`Transaction details (Legacy):`, {
+        this.debugLog(`Transaction details (Legacy):`, {
           userId: userId,
           userIdLength: userId.length,
           vaultHash: vaultHash,
@@ -211,9 +219,9 @@ class VaultChain {
       try {
         const estimatedGas = await this.contract.estimateGas.updateVaultHash(userIdParam, vaultHashParam);
         gasLimit = estimatedGas.mul(120).div(100); // Add 20% buffer
-        console.log(`Estimated gas: ${estimatedGas.toString()}, Using: ${gasLimit.toString()}`);
+        this.debugLog(`Estimated gas: ${estimatedGas.toString()}, Using: ${gasLimit.toString()}`);
       } catch (error) {
-        console.log(`Gas estimation failed, using default: ${error.message}`);
+        this.debugLog(`Gas estimation failed, using default: ${error.message}`);
         // L2 contracts use less gas, adjust default
         gasLimit = this.contractVersion === 'l2' ? 100000 : 300000;
       }
@@ -225,11 +233,11 @@ class VaultChain {
         })
       ));
       
-      console.log(`Transaction sent: ${tx.hash}`);
+      this.debugLog(`Transaction sent: ${tx.hash}`);
       
       const receipt = await tx.wait();
       const confirmTs = Date.now();
-      console.log(`Transaction confirmed in block ${receipt.blockNumber}`);
+      this.debugLog(`Transaction confirmed in block ${receipt.blockNumber}`);
       const block = await this.provider.getBlock(receipt.blockNumber);
 
       // Structured log for benchmarking anchoring latency and gas usage
@@ -291,7 +299,7 @@ class VaultChain {
       const network = await this.provider.getNetwork();
       const networkName = network.chainId === 42161 || network.chainId === 421614 ? 'Arbitrum' : 'Sepolia';
       
-      console.log(`Batch storing ${updates.length} vault hashes on ${networkName}...`);
+      this.debugLog(`Batch storing ${updates.length} vault hashes on ${networkName}...`);
       
       // Convert to bytes32 arrays
       const userIdHashes = updates.map(u => this.hashUserId(u.userId));
@@ -301,9 +309,9 @@ class VaultChain {
       try {
         const estimatedGas = await this.contract.estimateGas.batchUpdateVaultHash(userIdHashes, vaultHashes);
         gasLimit = estimatedGas.mul(120).div(100);
-        console.log(`Estimated gas: ${estimatedGas.toString()}, Using: ${gasLimit.toString()}`);
+        this.debugLog(`Estimated gas: ${estimatedGas.toString()}, Using: ${gasLimit.toString()}`);
       } catch (error) {
-        console.log(`Gas estimation failed, using default: ${error.message}`);
+        this.debugLog(`Gas estimation failed, using default: ${error.message}`);
         // Base gas + per-item gas (rough estimate)
         gasLimit = 50000 + (updates.length * 50000);
       }
@@ -315,11 +323,11 @@ class VaultChain {
         })
       ));
       
-      console.log(`Batch transaction sent: ${tx.hash}`);
+      this.debugLog(`Batch transaction sent: ${tx.hash}`);
       
       const receipt = await tx.wait();
       const confirmTs = Date.now();
-      console.log(`Batch transaction confirmed in block ${receipt.blockNumber}`);
+      this.debugLog(`Batch transaction confirmed in block ${receipt.blockNumber}`);
       const block = await this.provider.getBlock(receipt.blockNumber);
 
       // Structured log for benchmarking batch anchoring latency and gas usage
