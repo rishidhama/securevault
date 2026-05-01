@@ -443,16 +443,23 @@ function App() {
   const handleToggleFavorite = async (id) => {
     try {
       const response = await credentialsAPI.toggleFavorite(id);
-      setCredentials(prev => 
-        prev.map(cred => 
-          cred._id === id 
-            ? { ...cred, isFavorite: response.data.isFavorite }
-            : cred
-        )
-      );
-      
-      const newStats = await credentialsAPI.stats();
-      setStats(newStats.data || newStats);
+      const nextFavoriteValue = !!response?.data?.isFavorite;
+      let previousFavoriteValue = false;
+
+      setCredentials((prev) => prev.map((cred) => {
+        if (cred._id === id) {
+          previousFavoriteValue = !!cred.isFavorite;
+          return { ...cred, isFavorite: nextFavoriteValue };
+        }
+        return cred;
+      }));
+
+      if (previousFavoriteValue !== nextFavoriteValue) {
+        setStats((prev) => ({
+          ...prev,
+          favorites: Math.max(0, (prev.favorites || 0) + (nextFavoriteValue ? 1 : -1))
+        }));
+      }
     } catch (error) {
       throw error;
     }

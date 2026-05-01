@@ -12,6 +12,8 @@ const blockchainOperationSchema = new mongoose.Schema({
   credentialData: { type: Object },
   storedAt: { type: Date, default: Date.now }
 });
+blockchainOperationSchema.index({ userId: 1, storedAt: -1 });
+blockchainOperationSchema.index({ userId: 1, txHash: 1 });
 
 const BlockchainOperation = mongoose.model('BlockchainOperation', blockchainOperationSchema);
 
@@ -31,6 +33,7 @@ const pendingOperationSchema = new mongoose.Schema({
 });
 
 pendingOperationSchema.index({ userId: 1, status: 1, createdAt: -1 });
+pendingOperationSchema.index({ userId: 1, status: 1, anchoredAt: -1, txHash: 1 });
 const BlockchainPendingOperation = mongoose.model('BlockchainPendingOperation', pendingOperationSchema);
 
 /**
@@ -77,7 +80,7 @@ class PersistentBlockchainDecoder {
         );
         const supersededRes = await BlockchainPendingOperation.updateMany(
           { userId, status: 'queued', vaultHash: { $ne: vaultHash } },
-          { $set: { status: 'superseded', anchoredAt: anchoredAtDate } }
+          { $set: { status: 'superseded', txHash, blockNumber: blockNumber || null, anchoredAt: anchoredAtDate } }
         );
         return { anchored: anchoredRes.modifiedCount || 0, superseded: supersededRes.modifiedCount || 0 };
       }
@@ -151,8 +154,10 @@ class PersistentBlockchainDecoder {
   async getUserTransactionHistory(userId) {
     try {
       const operations = await BlockchainOperation.find({ userId })
+        .select('txHash blockNumber action credentialId vaultData vaultHash credentialData storedAt')
         .sort({ storedAt: -1 })
-        .limit(100);
+        .limit(100)
+        .lean();
 
       console.log(`Retrieved ${operations.length} transactions for user ${userId}`);
 
@@ -176,8 +181,10 @@ class PersistentBlockchainDecoder {
   async getUserPendingOperations(userId) {
     try {
       const ops = await BlockchainPendingOperation.find({ userId, status: 'queued' })
+        .select('status action credentialId vaultHash credentialData createdAt')
         .sort({ createdAt: -1 })
-        .limit(100);
+        .limit(100)
+        .lean();
       return ops.map(op => ({
         status: op.status,
         action: op.action,
@@ -197,8 +204,10 @@ class PersistentBlockchainDecoder {
   async getUserAnchoredOperations(userId) {
     try {
       const anchoredFromPending = await BlockchainPendingOperation.find({ userId, status: 'anchored' })
+        .select('txHash blockNumber action credentialId vaultHash credentialData anchoredAt createdAt')
         .sort({ anchoredAt: -1, createdAt: -1 })
-        .limit(100);
+        .limit(100)
+        .lean();
 
       return anchoredFromPending.map(op => ({
         txHash: op.txHash,
@@ -214,6 +223,62 @@ class PersistentBlockchainDecoder {
       }));
     } catch (error) {
       console.error('Failed to get anchored operations:', error.message);
+      return [];
+    }
+  }
+
+  async getUserAnchoredOperationGroups(userId) {
+    try {
+      const ops = await BlockchainPendingOperation.find({
+        userId,
+        status: { $in: ['anchored', 'superseded'] },
+        txHash: { $ne: null }
+      })
+        .select('txHash blockNumber vaultHash status action credentialId credentialData createdAt anchoredAt')
+        .sort({ anchoredAt: -1, createdAt: -1 })
+        .limit(300)
+        .lean();
+
+      const groupsByTx = new Map();
+      for (const op of ops) {
+        const txHash = op.txHash;
+        if (!txHash) continue;
+
+        const opTimestamp = op.anchoredAt || op.createdAt;
+        if (!groupsByTx.has(txHash)) {
+          groupsByTx.set(txHash, {
+            txHash,
+            blockNumber: op.blockNumber || 0,
+            timestamp: Math.floor(opTimestamp.getTime() / 1000),
+            vaultHash: op.vaultHash,
+            operations: []
+          });
+        }
+
+        const group = groupsByTx.get(txHash);
+        if ((op.blockNumber || 0) > (group.blockNumber || 0)) {
+          group.blockNumber = op.blockNumber || 0;
+        }
+        const groupTsMs = group.timestamp * 1000;
+        if (opTimestamp.getTime() > groupTsMs) {
+          group.timestamp = Math.floor(opTimestamp.getTime() / 1000);
+        }
+
+        group.operations.push({
+          status: op.status,
+          action: op.action,
+          credentialId: op.credentialId,
+          vaultHash: op.vaultHash,
+          title: op.credentialData?.title || 'Unknown',
+          category: op.credentialData?.category || 'Unknown',
+          hasUrl: op.credentialData?.hasUrl || false,
+          createdAt: op.createdAt
+        });
+      }
+
+      return Array.from(groupsByTx.values()).sort((a, b) => b.timestamp - a.timestamp);
+    } catch (error) {
+      console.error('Failed to get anchored operation groups:', error.message);
       return [];
     }
   }
@@ -270,11 +335,12 @@ class PersistentBlockchainDecoder {
   }
 
   async getUserOperationsSummary(userId) {
-    const [queued, anchored] = await Promise.all([
+    const [queued, anchored, anchoredGroups] = await Promise.all([
       this.getUserPendingOperations(userId),
-      this.getUserAnchoredOperations(userId)
+      this.getUserAnchoredOperations(userId),
+      this.getUserAnchoredOperationGroups(userId)
     ]);
-    return { queued, anchored };
+    return { queued, anchored, anchoredGroups };
   }
 
   async getAllOperations() {

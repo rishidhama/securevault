@@ -3,6 +3,22 @@ const API_BASE_URL = process.env.REACT_APP_API_URL ||
     ? window.location.origin 
     : 'http://localhost:5000');
 
+const responseCache = new Map();
+
+const getCachedRequest = async (cacheKey, requestFactory, ttlMs = 5000) => {
+  const now = Date.now();
+  const existing = responseCache.get(cacheKey);
+  if (existing && existing.expiresAt > now) return existing.promise;
+
+  const requestPromise = requestFactory().catch((error) => {
+    responseCache.delete(cacheKey);
+    throw error;
+  });
+
+  responseCache.set(cacheKey, { promise: requestPromise, expiresAt: now + ttlMs });
+  return requestPromise;
+};
+
 export const apiRequest = async (endpoint, options = {}) => {
   const baseUrl = API_BASE_URL.endsWith('/') ? API_BASE_URL.slice(0, -1) : API_BASE_URL;
   const cleanEndpoint = endpoint.startsWith('/') ? endpoint : `/${endpoint}`;
@@ -185,16 +201,16 @@ export const billingAPI = {
 };
 
 export const blockchainAPI = {
-  status: () => apiRequest('/api/blockchain/status'),
-  stats: () => apiRequest('/api/blockchain/stats'),
+  status: () => getCachedRequest('blockchain:status', () => apiRequest('/api/blockchain/status'), 8000),
+  stats: () => getCachedRequest('blockchain:stats', () => apiRequest('/api/blockchain/stats'), 8000),
   storeVault: (userId, payload) => apiRequest('/api/blockchain/store-vault', {
     method: 'POST',
     body: JSON.stringify({ userId, ...payload })
   }),
-  getVault: (userId) => apiRequest(`/api/blockchain/vault/${encodeURIComponent(userId)}`),
-  history: (userId) => apiRequest(`/api/blockchain/history/${encodeURIComponent(userId)}`),
-  activity: (userId) => apiRequest(`/api/blockchain/activity/${encodeURIComponent(userId)}`),
-  operations: (userId) => apiRequest(`/api/blockchain/operations/${encodeURIComponent(userId)}`),
+  getVault: (userId) => getCachedRequest(`blockchain:vault:${userId}`, () => apiRequest(`/api/blockchain/vault/${encodeURIComponent(userId)}`), 5000),
+  history: (userId) => getCachedRequest(`blockchain:history:${userId}`, () => apiRequest(`/api/blockchain/history/${encodeURIComponent(userId)}`), 5000),
+  activity: (userId) => getCachedRequest(`blockchain:activity:${userId}`, () => apiRequest(`/api/blockchain/activity/${encodeURIComponent(userId)}`), 5000),
+  operations: (userId) => getCachedRequest(`blockchain:operations:${userId}`, () => apiRequest(`/api/blockchain/operations/${encodeURIComponent(userId)}`), 5000),
   verify: (userId, payload) => apiRequest('/api/blockchain/verify', {
     method: 'POST',
     body: JSON.stringify({ userId, ...payload })

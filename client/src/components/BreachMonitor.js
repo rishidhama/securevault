@@ -85,35 +85,39 @@ const BreachMonitor = ({ credentials, decryptPassword, onUpdateCredential }) => 
     const newNotifications = [];
 
     try {
-      for (const cred of credentials) {
-        
+      const scanCredential = async (cred) => {
         const password = decryptPassword(cred.encryptedPassword, cred.iv, cred.salt);
-        if (password) {
-          const breachCount = await checkPasswordBreach(password);
-          newBreachData[cred._id] = {
-            count: breachCount,
-            lastChecked: new Date(),
-            isBreached: breachCount > 0
-          };
+        if (!password || password.startsWith('***')) return;
 
-          if (breachCount > 0) {
-            const websiteName = cred.website || cred.url || 'Unknown Website';
-            const username = cred.username || cred.email || 'your account';
-            
-            newNotifications.push({
-              id: Date.now() + crypto.getRandomValues(new Uint32Array(1))[0],
-              type: 'breach',
-              title: `Security Alert: ${websiteName}`,
-              message: `The password for "${websiteName}" (${username}) has been found in ${breachCount} data breaches. Consider changing this password immediately.`,
-              timestamp: new Date(),
-              credentialId: cred._id,
-              website: websiteName,
-              username: username,
-              breachCount: breachCount,
-              read: false
-            });
-          }
+        const breachCount = await checkPasswordBreach(password);
+        newBreachData[cred._id] = {
+          count: breachCount,
+          lastChecked: new Date(),
+          isBreached: breachCount > 0
+        };
+
+        if (breachCount > 0) {
+          const websiteName = cred.website || cred.url || 'Unknown Website';
+          const username = cred.username || cred.email || 'your account';
+          newNotifications.push({
+            id: Date.now() + crypto.getRandomValues(new Uint32Array(1))[0],
+            type: 'breach',
+            title: `Security Alert: ${websiteName}`,
+            message: `The password for "${websiteName}" (${username}) has been found in ${breachCount} data breaches. Consider changing this password immediately.`,
+            timestamp: new Date(),
+            credentialId: cred._id,
+            website: websiteName,
+            username,
+            breachCount,
+            read: false
+          });
         }
+      };
+
+      const concurrency = 5;
+      for (let i = 0; i < credentials.length; i += concurrency) {
+        const chunk = credentials.slice(i, i + concurrency);
+        await Promise.allSettled(chunk.map(scanCredential));
       }
 
       setBreachData(newBreachData);

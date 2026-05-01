@@ -229,7 +229,11 @@ router.get('/operations/:userId', authenticateToken, async (req, res) => {
       ...a,
       etherscanUrl: a.txHash ? `${explorerBase}/tx/${a.txHash}` : null
     }));
-    res.json({ success: true, data: { queued: summary.queued || [], anchored } });
+    const anchoredGroups = (summary.anchoredGroups || []).map((g) => ({
+      ...g,
+      etherscanUrl: g.txHash ? `${explorerBase}/tx/${g.txHash}` : null
+    }));
+    res.json({ success: true, data: { queued: summary.queued || [], anchored, anchoredGroups } });
   } catch (error) {
     res.status(500).json({ success: false, error: error.message });
   }

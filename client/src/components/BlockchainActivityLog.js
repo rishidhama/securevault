@@ -16,6 +16,7 @@ import { toast } from 'react-hot-toast';
 
 const BlockchainActivityLog = ({ userId }) => {
   const [anchored, setAnchored] = useState([]);
+  const [anchoredGroups, setAnchoredGroups] = useState([]);
   const [queued, setQueued] = useState([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -37,9 +38,11 @@ const BlockchainActivityLog = ({ userId }) => {
           const data = opsRes.data || opsRes;
           setQueued(data.queued || []);
           setAnchored(data.anchored || []);
+          setAnchoredGroups(data.anchoredGroups || []);
         } catch (error) {
           setQueued([]);
           setAnchored([]);
+          setAnchoredGroups([]);
         }
       }
       
@@ -157,7 +160,7 @@ const BlockchainActivityLog = ({ userId }) => {
       )}
 
       {/* Anchored Activity List */}
-      {anchored.length === 0 && queued.length === 0 ? (
+      {anchored.length === 0 && anchoredGroups.length === 0 && queued.length === 0 ? (
         <div className="bg-white border border-secondary-200 rounded-lg p-8 text-center">
           <Activity className="w-12 h-12 text-secondary-400 mx-auto mb-4" />
           <h4 className="text-lg font-medium text-secondary-700 mb-2">No Blockchain Activity Yet</h4>
@@ -167,6 +170,98 @@ const BlockchainActivityLog = ({ userId }) => {
           <div className="text-sm text-secondary-400">
             Each operation is recorded on the configured blockchain network for tamper-evidence
           </div>
+        </div>
+      ) : anchoredGroups.length > 0 ? (
+        <div className="space-y-3">
+          {anchoredGroups.map((group, index) => {
+            const ops = Array.isArray(group.operations) ? group.operations : [];
+            const primary = ops[0] || {};
+            const actionCounts = ops.reduce((acc, op) => {
+              const key = op?.action || 'OTHER';
+              acc[key] = (acc[key] || 0) + 1;
+              return acc;
+            }, {});
+            const actionSummary = ['CREATE', 'UPDATE', 'DELETE']
+              .filter((action) => actionCounts[action])
+              .map((action) => `${action} x${actionCounts[action]}`)
+              .join(' • ');
+            const ActionIcon = getActionIcon(primary.action);
+            const actionColor = getActionColor(primary.action);
+            const actionBgColor = getActionBgColor(primary.action);
+            return (
+              <div key={index} className="bg-white border border-secondary-200 rounded-lg p-4">
+                <div className="flex items-start gap-4">
+                  <div className={`p-2 rounded-lg ${actionBgColor}`}>
+                    <ActionIcon className={`w-5 h-5 ${actionColor}`} />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 mb-2">
+                      <h4 className="text-sm font-medium text-secondary-800">
+                        {ops.length > 1 ? `${ops.length} operations anchored together` : (primary.title || 'Credential Operation')}
+                      </h4>
+                      <span className="text-xs px-2 py-1 rounded-full bg-purple-50 text-purple-700">
+                        Batch
+                      </span>
+                    </div>
+                    <div className="space-y-1 text-sm text-secondary-600">
+                      <div className="flex items-center gap-2">
+                        <Clock className="w-3 h-3" />
+                        <span>{new Date(group.timestamp * 1000).toLocaleString()}</span>
+                      </div>
+                      {actionSummary ? (
+                        <div className="text-xs text-secondary-500">
+                          {actionSummary}
+                        </div>
+                      ) : null}
+                      <div className="flex items-center gap-2">
+                        <Hash className="w-3 h-3" />
+                        <span className="font-mono text-xs">
+                          Block: #{group.blockNumber}
+                        </span>
+                      </div>
+                    </div>
+                    <div className="mt-3 space-y-2">
+                      {ops.map((op, opIndex) => {
+                        const OpIcon = getActionIcon(op.action);
+                        const opColor = getActionColor(op.action);
+                        const opBg = getActionBgColor(op.action);
+                        return (
+                          <div key={`${op.credentialId || 'op'}-${opIndex}`} className="flex items-start gap-2 border border-secondary-100 rounded-lg p-2">
+                            <div className={`p-1.5 rounded ${opBg}`}>
+                              <OpIcon className={`w-3.5 h-3.5 ${opColor}`} />
+                            </div>
+                            <div className="min-w-0 flex-1">
+                              <div className="text-xs font-medium text-secondary-800 truncate">
+                                {op.title || 'Credential Operation'}
+                              </div>
+                              <div className="text-[11px] text-secondary-500">
+                                {op.action}
+                                {op.category ? ` • ${op.category}` : ''}
+                                {op.status === 'superseded' ? ' • superseded in batch' : ''}
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                  <div className="flex flex-col items-end gap-2">
+                    <a
+                      href={group.etherscanUrl || `https://sepolia.arbiscan.io/tx/${group.txHash}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-primary-600 hover:text-primary-700"
+                    >
+                      <ExternalLink className="w-4 h-4" />
+                    </a>
+                    <div className="text-xs text-secondary-500 font-mono">
+                      {group.txHash.slice(0, 8)}...{group.txHash.slice(-6)}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            );
+          })}
         </div>
       ) : (
         <div className="space-y-3">

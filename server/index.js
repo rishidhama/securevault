@@ -34,31 +34,34 @@ app.use(helmet({
   referrerPolicy: { policy: 'strict-origin-when-cross-origin' }
 }));
 
-// Lightweight performance logging middleware (API benchmarking)
-app.use((req, res, next) => {
-  const start = process.hrtime.bigint();
-  res.on('finish', () => {
-    try {
-      const end = process.hrtime.bigint();
-      const durationMs = Number(end - start) / 1e6;
-      const entry = {
-        op: 'api',
-        method: req.method,
-        path: req.path,
-        originalUrl: req.originalUrl,
-        status: res.statusCode,
-        timeMs: durationMs,
-        ts: Date.now()
-      };
-      // Emit as single-line JSON for easy post-processing
-      // eslint-disable-next-line no-console
-      console.log(JSON.stringify(entry));
-    } catch (e) {
-      // Swallow logging errors to avoid impacting API behaviour
-    }
+// Lightweight performance logging middleware (enabled only for benchmarking/profiling)
+const perfLoggingEnabled = process.env.BENCHMARK_MODE === 'true' || process.env.API_PERF_LOGGING === 'true';
+if (perfLoggingEnabled) {
+  app.use((req, res, next) => {
+    const start = process.hrtime.bigint();
+    res.on('finish', () => {
+      try {
+        const end = process.hrtime.bigint();
+        const durationMs = Number(end - start) / 1e6;
+        const entry = {
+          op: 'api',
+          method: req.method,
+          path: req.path,
+          originalUrl: req.originalUrl,
+          status: res.statusCode,
+          timeMs: durationMs,
+          ts: Date.now()
+        };
+        // Emit as single-line JSON for easy post-processing
+        // eslint-disable-next-line no-console
+        console.log(JSON.stringify(entry));
+      } catch (e) {
+        // Swallow logging errors to avoid impacting API behaviour
+      }
+    });
+    next();
   });
-  next();
-});
+}
 
 const corsOptions = {
   origin: [

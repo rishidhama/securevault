@@ -485,18 +485,21 @@ router.patch('/:id/category', authenticateToken, [
 
 router.patch('/:id/favorite', authenticateToken, async (req, res) => {
   try {
-    const credential = await Credential.findOne({ _id: req.params.id, userId: req.user.userId });
-    
+    const credential = await Credential.findOne({ _id: req.params.id, userId: req.user.userId }).select('isFavorite');
     if (!credential) {
       return res.status(404).json({ success: false, error: 'Credential not found' });
     }
-    
-    await credential.toggleFavorite();
+
+    const updatedCredential = await Credential.findOneAndUpdate(
+      { _id: req.params.id, userId: req.user.userId },
+      { $set: { isFavorite: !credential.isFavorite } },
+      { new: true, runValidators: true }
+    ).select('-__v');
     
     res.json({
       success: true,
-      message: `Credential ${credential.isFavorite ? 'added to' : 'removed from'} favorites`,
-      data: credential
+      message: `Credential ${updatedCredential.isFavorite ? 'added to' : 'removed from'} favorites`,
+      data: updatedCredential
     });
   } catch (error) {
     console.error('Error toggling favorite:', error);
@@ -516,9 +519,11 @@ router.get('/categories/list', authenticateToken, async (req, res) => {
 
 router.get('/stats/overview', authenticateToken, async (req, res) => {
   try {
-    const totalCredentials = await Credential.countDocuments({ userId: req.user.userId });
-    const favoriteCredentials = await Credential.countDocuments({ userId: req.user.userId, isFavorite: true });
-    const categories = await Credential.distinct('category', { userId: req.user.userId });
+    const [totalCredentials, favoriteCredentials, categories] = await Promise.all([
+      Credential.countDocuments({ userId: req.user.userId }),
+      Credential.countDocuments({ userId: req.user.userId, isFavorite: true }),
+      Credential.distinct('category', { userId: req.user.userId })
+    ]);
     
     res.json({ success: true, data: { total: totalCredentials, favorites: favoriteCredentials, categories: categories.length } });
   } catch (error) {
