@@ -206,6 +206,7 @@ function analyzeServer(serverPath) {
   }
   const lines = content.split(/\r?\n/); // Handle both \n and \r\n
   const getTimesPaginated = [];
+  const getTimesPaginatedByLimit = {};
   const getTimesFullDataset = [];
   const postTimes = [];
   let parsedCount = 0;
@@ -233,9 +234,21 @@ function analyzeServer(serverPath) {
         getTimesFullDataset.push(d.timeMs);
       } else if (url.includes('page=') || url.includes('limit=')) {
         getTimesPaginated.push(d.timeMs);
+        const queryIndex = url.indexOf('?');
+        const queryString = queryIndex >= 0 ? url.slice(queryIndex + 1) : '';
+        const params = new URLSearchParams(queryString);
+        const limitValue = params.get('limit') || 'default';
+        if (!getTimesPaginatedByLimit[limitValue]) {
+          getTimesPaginatedByLimit[limitValue] = [];
+        }
+        getTimesPaginatedByLimit[limitValue].push(d.timeMs);
       } else {
         // Default requests (no params) - treat as paginated (default limit 100)
         getTimesPaginated.push(d.timeMs);
+        if (!getTimesPaginatedByLimit.default) {
+          getTimesPaginatedByLimit.default = [];
+        }
+        getTimesPaginatedByLimit.default.push(d.timeMs);
       }
     }
     if (d.method === 'POST' && typeof url === 'string' && url.startsWith('/api/credentials')) {
@@ -246,11 +259,26 @@ function analyzeServer(serverPath) {
   console.log('\n=== Backend API ===');
   if (getTimesPaginated.length) {
     console.log(
-      'GET /api/credentials (PAGINATED, limit=100) ms: median =',
+      'GET /api/credentials (PAGINATED, all limits combined) ms: median =',
       median(getTimesPaginated).toFixed(2),
       'p95 =',
       p95(getTimesPaginated).toFixed(2),
     );
+    const sortedLimits = Object.keys(getTimesPaginatedByLimit).sort((a, b) => {
+      if (a === 'default') return 1;
+      if (b === 'default') return -1;
+      return Number(a) - Number(b);
+    });
+    sortedLimits.forEach((limitKey) => {
+      const arr = getTimesPaginatedByLimit[limitKey];
+      const label = limitKey === 'default' ? 'default' : limitKey;
+      console.log(
+        `GET /api/credentials (PAGINATED, limit=${label}) ms: median =`,
+        median(arr).toFixed(2),
+        'p95 =',
+        p95(arr).toFixed(2),
+      );
+    });
   } else {
     console.log('No paginated GET /api/credentials entries found in server log.');
   }

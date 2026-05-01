@@ -218,12 +218,13 @@ router.get('/activity/:userId', authenticateToken, async (req, res) => {
 router.get('/operations/:userId', authenticateToken, async (req, res) => {
   try {
     const { userId } = req.params;
+    const refresh = req.query?.refresh === 'true';
     if (!requireSelfUser(req, res, userId)) return;
     if (mongoose.connection.readyState !== 1) {
       return res.json({ success: true, data: { queued: [], anchored: [] } });
     }
 
-    const summary = await blockchainDecoder.getUserOperationsSummary(userId);
+    const summary = await blockchainDecoder.getUserOperationsSummary(userId, { cache: !refresh });
     const explorerBase = await getExplorerBase();
     const anchored = (summary.anchored || []).map((a) => ({
       ...a,

@@ -7,11 +7,102 @@ const { authenticateToken } = require('./auth');
 const ethereumService = require('../services/ethereum-service');
 const blockchainDecoder = require('../services/blockchain-decoder-persistent');
 const batchQueue = require('../services/batch-queue');
+
+const credentialsListCache = new Map();
+const credentialsListCacheTtlMs = 5000;
+const credentialsListCacheTtlMsFullDataset = Math.max(
+  credentialsListCacheTtlMs,
+  parseInt(process.env.CREDENTIALS_LIST_CACHE_TTL_FULL_MS || '30000', 10) || 30000
+);
+const buildCredentialsCacheKey = (userId, query) => {
+  const q = query || {};
+  const normalized = Object.keys(q)
+    .sort()
+    .map((key) => `${key}=${Array.isArray(q[key]) ? q[key].join(',') : q[key]}`)
+    .join('&');
+  return `${String(userId)}::${normalized}`;
+};
+const getCachedCredentialsList = (cacheKey) => {
+  const cached = credentialsListCache.get(cacheKey);
+  if (!cached) return null;
+  if (cached.expiresAt <= Date.now()) {
+    credentialsListCache.delete(cacheKey);
+    return null;
+  }
+  return cached.payload;
+};
+const setCachedCredentialsList = (cacheKey, payload, ttlMs = credentialsListCacheTtlMs) => {
+  credentialsListCache.set(cacheKey, {
+    payload,
+    expiresAt: Date.now() + ttlMs
+  });
+};
+const invalidateCredentialsListCacheForUser = (userId) => {
+  const prefix = `${String(userId)}::`;
+  for (const key of credentialsListCache.keys()) {
+    if (key.startsWith(prefix)) credentialsListCache.delete(key);
+  }
+};
+
 const normalizeMerkleRoot = (value) => {
   if (!value || typeof value !== 'string') return null;
   const raw = value.startsWith('0x') ? value.slice(2) : value;
   if (!/^[a-fA-F0-9]{64}$/.test(raw)) return null;
   return raw.toLowerCase();
+};
+
+const BLOCKCHAIN_EVENT_TIMEOUT_MS = Math.max(
+  0,
+  parseInt(process.env.BLOCKCHAIN_EVENT_TIMEOUT_MS || '120', 10) || 120
+);
+
+const withBlockchainEventTimeout = async (operationLabel, eventPromiseFactory) => {
+  try {
+    const eventPromise = eventPromiseFactory();
+    if (!BLOCKCHAIN_EVENT_TIMEOUT_MS) {
+      return await eventPromise;
+    }
+
+    const timeoutToken = Symbol('blockchain-timeout');
+    const timeoutPromise = new Promise((resolve) => {
+      setTimeout(() => resolve(timeoutToken), BLOCKCHAIN_EVENT_TIMEOUT_MS);
+    });
+
+    const result = await Promise.race([eventPromise, timeoutPromise]);
+    if (result !== timeoutToken) {
+      return result;
+    }
+
+    // Keep blockchain side effects running in the background so anchoring still happens.
+    eventPromise.catch((error) => {
+      console.error(`Deferred blockchain event failed for ${operationLabel}:`, error?.message || error);
+    });
+
+    return {
+      enabled: process.env.ETHEREUM_ENABLED === 'true',
+      queued: process.env.BATCH_ENABLED === 'true',
+      txHash: null,
+      deferred: true,
+      message: `Blockchain processing deferred after ${BLOCKCHAIN_EVENT_TIMEOUT_MS}ms timeout`
+    };
+  } catch (error) {
+    console.error(`Blockchain event wrapper failed for ${operationLabel}:`, error?.message || error);
+    return { enabled: process.env.ETHEREUM_ENABLED === 'true', queued: false, txHash: null, error: error.message };
+  }
+};
+
+const scheduleBlockchainEvent = (operationLabel, eventPromiseFactory, onComplete) => {
+  Promise.resolve()
+    .then(eventPromiseFactory)
+    .then((result) => {
+      if (typeof onComplete === 'function') onComplete(result);
+    })
+    .catch((error) => {
+      console.error(`Background blockchain event failed for ${operationLabel}:`, error?.message || error);
+      if (typeof onComplete === 'function') {
+        onComplete({ enabled: process.env.ETHEREUM_ENABLED === 'true', queued: false, txHash: null, error: error.message });
+      }
+    });
 };
 
 const createBlockchainEvent = async (userId, action, credentialId, credentialData = null, merkleRoot = null) => {
@@ -223,7 +314,8 @@ router.get('/', authenticateToken, async (req, res) => {
       sortOrder = 'desc',
       page,
       limit,
-      getAll = 'false' // Set to 'true' to bypass pagination and get all
+      getAll = 'false', // Set to 'true' to bypass pagination and get all
+      includeTotal = 'false'
     } = req.query;
     
     let query = { userId: req.user.userId };
@@ -252,9 +344,18 @@ router.get('/', authenticateToken, async (req, res) => {
     const limitNum = shouldPaginate ? (parseInt(limit, 10) || 100) : null;
     const skip = shouldPaginate ? (pageNum - 1) * limitNum : 0;
     
-    // Get total count for pagination metadata
-    const totalCount = await Credential.countDocuments(query);
-    
+    const cacheKey = buildCredentialsCacheKey(req.user.userId, req.query);
+    const useListCache = req.method === 'GET' && search ? false : true;
+    if (useListCache) {
+      const cachedPayload = getCachedCredentialsList(cacheKey);
+      if (cachedPayload) {
+        if (cachedPayload.serialized) {
+          return res.type('application/json').send(cachedPayload.serialized);
+        }
+        return res.json(cachedPayload);
+      }
+    }
+
     // Build query with pagination
     let queryBuilder = Credential.find(query)
       .select('_id title username encryptedPassword iv salt url notes category tags isFavorite createdAt lastModified')
@@ -263,17 +364,22 @@ router.get('/', authenticateToken, async (req, res) => {
       .maxTimeMS(5000); // Performance: Timeout after 5s to prevent hanging queries
     
     if (shouldPaginate && limitNum) {
-      queryBuilder = queryBuilder.skip(skip).limit(limitNum);
+      queryBuilder = queryBuilder.skip(skip).limit(limitNum + 1);
     }
     
-    const credentials = await queryBuilder;
-    
-    // Calculate pagination metadata
-    const totalPages = shouldPaginate && limitNum ? Math.ceil(totalCount / limitNum) : 1;
-    const hasNextPage = shouldPaginate && limitNum ? pageNum < totalPages : false;
+    const resultSet = await queryBuilder;
+    const hasNextPage = shouldPaginate && limitNum ? resultSet.length > limitNum : false;
+    const credentials = shouldPaginate && limitNum ? resultSet.slice(0, limitNum) : resultSet;
     const hasPrevPage = shouldPaginate && limitNum ? pageNum > 1 : false;
+
+    let totalCount = null;
+    let totalPages = null;
+    if (includeTotal === 'true') {
+      totalCount = await Credential.countDocuments(query);
+      totalPages = shouldPaginate && limitNum ? Math.ceil(totalCount / limitNum) : 1;
+    }
     
-    res.json({
+    const payload = {
       success: true,
       data: credentials,
       count: credentials.length,
@@ -288,7 +394,22 @@ router.get('/', authenticateToken, async (req, res) => {
         total: totalCount,
         getAll: true
       }
-    });
+    };
+
+    if (useListCache) {
+      const shouldCacheSerialized = getAll === 'true';
+      if (shouldCacheSerialized) {
+        setCachedCredentialsList(
+          cacheKey,
+          { serialized: JSON.stringify(payload) },
+          credentialsListCacheTtlMsFullDataset
+        );
+      } else {
+        setCachedCredentialsList(cacheKey, payload, credentialsListCacheTtlMs);
+      }
+    }
+
+    res.json(payload);
   } catch (error) {
     console.error('Error fetching credentials:', error);
     res.status(500).json({
@@ -345,12 +466,30 @@ router.post('/', authenticateToken, validateCredential, async (req, res) => {
     
     await credential.save();
     
-    const blockchain = await createBlockchainEvent(
-      req.user.userId,
+    const blockchain = {
+      enabled: process.env.ETHEREUM_ENABLED === 'true',
+      queued: process.env.BATCH_ENABLED === 'true',
+      txHash: null,
+      deferred: true,
+      message: 'Credential saved. Blockchain anchoring scheduled in background.'
+    };
+    invalidateCredentialsListCacheForUser(req.user.userId);
+    blockchainDecoder.invalidateUserOperationsSummary(req.user.userId);
+
+    scheduleBlockchainEvent(
       'CREATE',
-      credential._id.toString(),
-      credential,
-      normalizedMerkleRoot
+      () => createBlockchainEvent(
+        req.user.userId,
+        'CREATE',
+        credential._id.toString(),
+        credential,
+        normalizedMerkleRoot
+      ),
+      () => {
+        // Any successful/failed background result updates queued/anchored state in DB,
+        // so invalidate related summaries to keep next reads fresh.
+        blockchainDecoder.invalidateUserOperationsSummary(req.user.userId);
+      }
     );
     
     res.status(201).json({
@@ -392,13 +531,18 @@ router.put('/:id', authenticateToken, validatePartialUpdate, async (req, res) =>
       return res.status(404).json({ success: false, error: 'Credential not found' });
     }
     
-    const blockchain = await createBlockchainEvent(
-      req.user.userId,
+    const blockchain = await withBlockchainEventTimeout(
       'UPDATE',
-      credential._id.toString(),
-      credential,
-      normalizedMerkleRoot
+      () => createBlockchainEvent(
+        req.user.userId,
+        'UPDATE',
+        credential._id.toString(),
+        credential,
+        normalizedMerkleRoot
+      )
     );
+    invalidateCredentialsListCacheForUser(req.user.userId);
+    blockchainDecoder.invalidateUserOperationsSummary(req.user.userId);
     
     res.json({
       success: true,
@@ -439,13 +583,18 @@ router.delete('/:id', authenticateToken, async (req, res) => {
       return res.status(404).json({ success: false, error: 'Credential not found' });
     }
     
-    const blockchain = await createBlockchainEvent(
-      req.user.userId,
+    const blockchain = await withBlockchainEventTimeout(
       'DELETE',
-      credential._id.toString(),
-      credential,
-      normalizedMerkleRoot
+      () => createBlockchainEvent(
+        req.user.userId,
+        'DELETE',
+        credential._id.toString(),
+        credential,
+        normalizedMerkleRoot
+      )
     );
+    invalidateCredentialsListCacheForUser(req.user.userId);
+    blockchainDecoder.invalidateUserOperationsSummary(req.user.userId);
     
     res.json({ success: true, message: 'Credential deleted successfully', blockchain });
   } catch (error) {
@@ -476,6 +625,7 @@ router.patch('/:id/category', authenticateToken, [
       return res.status(404).json({ success: false, error: 'Credential not found' });
     }
     
+    invalidateCredentialsListCacheForUser(req.user.userId);
     res.json({ success: true, message: 'Category updated successfully', data: credential });
   } catch (error) {
     console.error('Error updating category:', error);
@@ -501,6 +651,7 @@ router.patch('/:id/favorite', authenticateToken, async (req, res) => {
       message: `Credential ${updatedCredential.isFavorite ? 'added to' : 'removed from'} favorites`,
       data: updatedCredential
     });
+    invalidateCredentialsListCacheForUser(req.user.userId);
   } catch (error) {
     console.error('Error toggling favorite:', error);
     res.status(500).json({ success: false, error: 'Failed to toggle favorite status' });

@@ -46,6 +46,13 @@ const BlockchainPendingOperation = mongoose.model('BlockchainPendingOperation', 
 class PersistentBlockchainDecoder {
   constructor() {
     this.operationCache = new Map(); // Cache for decoded operations
+    this.userSummaryCache = new Map();
+    this.userSummaryCacheTtlMs = 5000;
+  }
+
+  invalidateUserOperationsSummary(userId) {
+    if (!userId) return;
+    this.userSummaryCache.delete(String(userId));
   }
 
   async storePendingOperation(operationData) {
@@ -59,6 +66,7 @@ class PersistentBlockchainDecoder {
         credentialData: operationData.credentialData || null,
         status: 'queued'
       });
+      this.invalidateUserOperationsSummary(operationData.userId);
       return doc;
     } catch (error) {
       console.error('Failed to store pending operation:', error.message);
@@ -82,6 +90,7 @@ class PersistentBlockchainDecoder {
           { userId, status: 'queued', vaultHash: { $ne: vaultHash } },
           { $set: { status: 'superseded', txHash, blockNumber: blockNumber || null, anchoredAt: anchoredAtDate } }
         );
+        this.invalidateUserOperationsSummary(userId);
         return { anchored: anchoredRes.modifiedCount || 0, superseded: supersededRes.modifiedCount || 0 };
       }
 
@@ -90,6 +99,7 @@ class PersistentBlockchainDecoder {
         { userId, status: 'queued' },
         { $set: { status: 'anchored', txHash, blockNumber: blockNumber || null, anchoredAt: anchoredAtDate } }
       );
+      this.invalidateUserOperationsSummary(userId);
       return { anchored: res.modifiedCount || 0, superseded: 0 };
     } catch (error) {
       console.error('Failed to mark anchored operations:', error.message);
@@ -104,6 +114,7 @@ class PersistentBlockchainDecoder {
         { userId, status: 'queued', vaultHash },
         { $set: { status: 'superseded', anchoredAt: new Date() } }
       );
+      this.invalidateUserOperationsSummary(userId);
       return res.modifiedCount || 0;
     } catch (error) {
       console.error('Failed to mark superseded operations:', error.message);
@@ -137,6 +148,7 @@ class PersistentBlockchainDecoder {
       );
 
       this.operationCache.set(txHash, operationWithTimestamp);
+      this.invalidateUserOperationsSummary(operationData.userId);
 
       console.log(`Stored operation details for txHash: ${txHash}`);
 
@@ -334,13 +346,33 @@ class PersistentBlockchainDecoder {
     }
   }
 
-  async getUserOperationsSummary(userId) {
+  async getUserOperationsSummary(userId, options = {}) {
+    const cacheEnabled = options.cache !== false;
+    const cacheKey = String(userId);
+    const now = Date.now();
+
+    if (cacheEnabled) {
+      const cached = this.userSummaryCache.get(cacheKey);
+      if (cached && cached.expiresAt > now) {
+        return cached.data;
+      }
+    }
+
     const [queued, anchored, anchoredGroups] = await Promise.all([
       this.getUserPendingOperations(userId),
       this.getUserAnchoredOperations(userId),
       this.getUserAnchoredOperationGroups(userId)
     ]);
-    return { queued, anchored, anchoredGroups };
+    const summary = { queued, anchored, anchoredGroups };
+
+    if (cacheEnabled) {
+      this.userSummaryCache.set(cacheKey, {
+        data: summary,
+        expiresAt: now + this.userSummaryCacheTtlMs
+      });
+    }
+
+    return summary;
   }
 
   async getAllOperations() {

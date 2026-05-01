@@ -1,6 +1,8 @@
 //   BENCH_MASTER_KEY - master key for benchmark users (default: BenchmarkMasterKey123!)
 //   BENCH_EMAILS     - comma-separated list of benchmark emails
-//   BENCH_READS      - number of GET /api/credentials calls per user (default: 50)
+//   BENCH_READS      - number of paginated GET /api/credentials calls per page size (default: 50)
+//   BENCH_PAGE_LIMITS - comma-separated pagination sizes (default: 10,25,50,100)
+//   BENCH_READS_FULL - number of full-dataset GET /api/credentials?getAll=true calls (default: 10)
 //   BENCH_WRITES     - number of POST /api/credentials calls per user for write tests (default: 10)
 
 
@@ -25,6 +27,11 @@ const EMAILS = (process.env.BENCH_EMAILS || '').trim()
   : DEFAULT_EMAILS;
 
 const READ_REQUESTS = parseInt(process.env.BENCH_READS || '50', 10);
+const PAGE_LIMITS = (process.env.BENCH_PAGE_LIMITS || '10,25,50,100')
+  .split(',')
+  .map((n) => parseInt(n.trim(), 10))
+  .filter((n) => Number.isFinite(n) && n > 0);
+const FULL_READ_REQUESTS = parseInt(process.env.BENCH_READS_FULL || '10', 10);
 const WRITE_REQUESTS = parseInt(process.env.BENCH_WRITES || '10', 10);
 
 function deriveAuthSecret(email, masterKey) {
@@ -87,8 +94,18 @@ async function login(email, masterKey) {
   return registerIfNeeded(email, masterKey);
 }
 
-async function getCredentials(token) {
-  const res = await fetch(`${BASE_URL}/api/credentials?sortBy=createdAt&sortOrder=desc`, {
+async function getCredentials(token, options = {}) {
+  const params = new URLSearchParams();
+  params.append('sortBy', 'createdAt');
+  params.append('sortOrder', 'desc');
+  if (options.getAll) {
+    params.append('getAll', 'true');
+  } else {
+    params.append('page', '1');
+    params.append('limit', String(options.limit || 100));
+  }
+
+  const res = await fetch(`${BASE_URL}/api/credentials?${params.toString()}`, {
     method: 'GET',
     headers: { Authorization: `Bearer ${token}` }
   });
@@ -159,13 +176,27 @@ async function benchmarkUser(email) {
       console.log(`\n✓ User ${email} has ${credCount} credentials`);
     }
 
-    console.log(`\n=== Benchmarking reads for ${email} (${READ_REQUESTS}x GET /api/credentials) ===`);
-    for (let i = 0; i < READ_REQUESTS; i += 1) {
-      try {
-        // eslint-disable-next-line no-await-in-loop
-        await getCredentials(token);
-      } catch (err) {
-        console.error(`Read error [${email}] #${i + 1}:`, err.message);
+    for (const limit of PAGE_LIMITS) {
+      console.log(`\n=== Benchmarking paginated reads for ${email} (${READ_REQUESTS}x GET /api/credentials?page=1&limit=${limit}) ===`);
+      for (let i = 0; i < READ_REQUESTS; i += 1) {
+        try {
+          // eslint-disable-next-line no-await-in-loop
+          await getCredentials(token, { getAll: false, limit });
+        } catch (err) {
+          console.error(`Read error [${email}] limit=${limit} #${i + 1}:`, err.message);
+        }
+      }
+    }
+
+    if (FULL_READ_REQUESTS > 0) {
+      console.log(`\n=== Benchmarking full dataset reads for ${email} (${FULL_READ_REQUESTS}x GET /api/credentials?getAll=true) ===`);
+      for (let i = 0; i < FULL_READ_REQUESTS; i += 1) {
+        try {
+          // eslint-disable-next-line no-await-in-loop
+          await getCredentials(token, { getAll: true });
+        } catch (err) {
+          console.error(`Full read error [${email}] #${i + 1}:`, err.message);
+        }
       }
     }
 
