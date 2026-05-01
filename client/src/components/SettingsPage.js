@@ -29,7 +29,8 @@ import {
 import { toast } from 'react-hot-toast';
 import BiometricAuth from './BiometricAuth';
 import BackupCodesManager from './BackupCodesManager';
-import BlockchainDashboard from './BlockchainDashboard';
+import BlockchainMonitor from './BlockchainMonitor';
+import BlockchainActivityLog from './BlockchainActivityLog';
 import { authAPI, mfaAPI, billingAPI, importExportAPI } from '../services/api';
 import encryptionService from '../utils/encryption';
 import { deriveAuthSecret } from '../utils/authSecret';
@@ -1430,7 +1431,20 @@ const SettingsPage = ({ user, masterKey, onLogout, credentials, decryptPassword 
               <h3 className="text-xl font-semibold text-secondary-900 mb-2">Blockchain Security</h3>
               <p className="text-secondary-600">Monitor blockchain activity and security status</p>
             </div>
-            <BlockchainDashboard userId={user?.userId || user?._id || user?.id} />
+            
+            <div className="space-y-6">
+              {/* Blockchain Monitor */}
+              <div>
+                <h4 className="text-lg font-medium text-secondary-900 mb-4">Connection Status</h4>
+                <BlockchainMonitor userId={user?.userId || user?._id || user?.id} />
+              </div>
+              
+              {/* Blockchain Activity Log */}
+              <div>
+                <h4 className="text-lg font-medium text-secondary-900 mb-4">Activity History</h4>
+                <BlockchainActivityLog userId={user?.userId || user?._id || user?.id} />
+              </div>
+            </div>
           </div>
         );
 
