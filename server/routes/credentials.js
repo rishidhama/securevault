@@ -43,6 +43,47 @@ const invalidateCredentialsListCacheForUser = (userId) => {
     if (key.startsWith(prefix)) credentialsListCache.delete(key);
   }
 };
+const credentialsStatsCache = new Map();
+const credentialsStatsCacheTtlMs = parseInt(process.env.CREDENTIALS_STATS_CACHE_TTL_MS || '15000', 10) || 15000;
+const getCachedCredentialsStats = (userId) => {
+  const key = String(userId);
+  const cached = credentialsStatsCache.get(key);
+  if (!cached) return null;
+  if (cached.expiresAt <= Date.now()) {
+    credentialsStatsCache.delete(key);
+    return null;
+  }
+  return cached.payload;
+};
+const setCachedCredentialsStats = (userId, payload) => {
+  credentialsStatsCache.set(String(userId), {
+    payload,
+    expiresAt: Date.now() + credentialsStatsCacheTtlMs
+  });
+};
+const credentialsCategoriesCache = new Map();
+const credentialsCategoriesCacheTtlMs = parseInt(process.env.CREDENTIALS_CATEGORIES_CACHE_TTL_MS || '15000', 10) || 15000;
+const getCachedCredentialsCategories = (userId) => {
+  const key = String(userId);
+  const cached = credentialsCategoriesCache.get(key);
+  if (!cached) return null;
+  if (cached.expiresAt <= Date.now()) {
+    credentialsCategoriesCache.delete(key);
+    return null;
+  }
+  return cached.payload;
+};
+const setCachedCredentialsCategories = (userId, payload) => {
+  credentialsCategoriesCache.set(String(userId), {
+    payload,
+    expiresAt: Date.now() + credentialsCategoriesCacheTtlMs
+  });
+};
+const invalidateCredentialDerivedCachesForUser = (userId) => {
+  const key = String(userId);
+  credentialsStatsCache.delete(key);
+  credentialsCategoriesCache.delete(key);
+};
 
 const normalizeMerkleRoot = (value) => {
   if (!value || typeof value !== 'string') return null;
@@ -479,6 +520,7 @@ router.post('/', authenticateToken, validateCredential, async (req, res) => {
       message: 'Credential saved. Blockchain anchoring scheduled in background.'
     };
     invalidateCredentialsListCacheForUser(req.user.userId);
+    invalidateCredentialDerivedCachesForUser(req.user.userId);
     blockchainDecoder.invalidateUserOperationsSummary(req.user.userId);
 
     scheduleBlockchainEvent(
@@ -547,6 +589,7 @@ router.put('/:id', authenticateToken, validatePartialUpdate, async (req, res) =>
       )
     );
     invalidateCredentialsListCacheForUser(req.user.userId);
+    invalidateCredentialDerivedCachesForUser(req.user.userId);
     blockchainDecoder.invalidateUserOperationsSummary(req.user.userId);
     
     res.json({
@@ -599,6 +642,7 @@ router.delete('/:id', authenticateToken, async (req, res) => {
       )
     );
     invalidateCredentialsListCacheForUser(req.user.userId);
+    invalidateCredentialDerivedCachesForUser(req.user.userId);
     blockchainDecoder.invalidateUserOperationsSummary(req.user.userId);
     
     res.json({ success: true, message: 'Credential deleted successfully', blockchain });
@@ -631,6 +675,7 @@ router.patch('/:id/category', authenticateToken, [
     }
     
     invalidateCredentialsListCacheForUser(req.user.userId);
+    invalidateCredentialDerivedCachesForUser(req.user.userId);
     res.json({ success: true, message: 'Category updated successfully', data: credential });
   } catch (error) {
     console.error('Error updating category:', error);
@@ -657,6 +702,7 @@ router.patch('/:id/favorite', authenticateToken, async (req, res) => {
       data: updatedCredential
     });
     invalidateCredentialsListCacheForUser(req.user.userId);
+    invalidateCredentialDerivedCachesForUser(req.user.userId);
   } catch (error) {
     console.error('Error toggling favorite:', error);
     res.status(500).json({ success: false, error: 'Failed to toggle favorite status' });
@@ -665,8 +711,15 @@ router.patch('/:id/favorite', authenticateToken, async (req, res) => {
 
 router.get('/categories/list', authenticateToken, async (req, res) => {
   try {
+    const cached = getCachedCredentialsCategories(req.user.userId);
+    if (cached) {
+      return res.json(cached);
+    }
+
     const categories = await Credential.distinct('category', { userId: req.user.userId });
-    res.json({ success: true, data: categories });
+    const payload = { success: true, data: categories };
+    setCachedCredentialsCategories(req.user.userId, payload);
+    res.json(payload);
   } catch (error) {
     console.error('Error fetching categories:', error);
     res.status(500).json({ success: false, error: 'Failed to fetch categories' });
@@ -675,13 +728,20 @@ router.get('/categories/list', authenticateToken, async (req, res) => {
 
 router.get('/stats/overview', authenticateToken, async (req, res) => {
   try {
+    const cached = getCachedCredentialsStats(req.user.userId);
+    if (cached) {
+      return res.json(cached);
+    }
+
     const [totalCredentials, favoriteCredentials, categories] = await Promise.all([
       Credential.countDocuments({ userId: req.user.userId }),
       Credential.countDocuments({ userId: req.user.userId, isFavorite: true }),
       Credential.distinct('category', { userId: req.user.userId })
     ]);
-    
-    res.json({ success: true, data: { total: totalCredentials, favorites: favoriteCredentials, categories: categories.length } });
+
+    const payload = { success: true, data: { total: totalCredentials, favorites: favoriteCredentials, categories: categories.length } };
+    setCachedCredentialsStats(req.user.userId, payload);
+    res.json(payload);
   } catch (error) {
     console.error('Error fetching stats:', error);
     res.status(500).json({ success: false, error: 'Failed to fetch statistics' });
