@@ -40,10 +40,6 @@ const userSchema = new mongoose.Schema({
     code: String,
     used: { type: Boolean, default: false }
   }],
-  lastLogin: {
-    type: Date,
-    default: Date.now
-  },
   loginAttempts: {
     type: Number,
     default: 0

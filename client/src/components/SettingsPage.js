@@ -647,12 +647,6 @@ const SettingsPage = ({ user, masterKey, onLogout, credentials, decryptPassword 
                   {user?.createdAt ? new Date(user.createdAt).toLocaleDateString() : 'Unknown'}
                 </p>
               </div>
-              <div className="bg-secondary-50 p-4 rounded-lg">
-                <label className="block text-sm font-medium text-secondary-700 mb-2">Last Login</label>
-                <p className="text-secondary-900 font-medium">
-                  {user?.lastLogin ? new Date(user.lastLogin).toLocaleString() : 'Unknown'}
-                </p>
-              </div>
             </div>
           </div>
         );

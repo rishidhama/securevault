@@ -129,9 +129,6 @@ router.post('/register', validateRegistration, async (req, res) => {
 
     const token = generateToken(user._id);
 
-    user.lastLogin = new Date();
-    await user.save();
-
     res.status(201).json({
       success: true,
       message: 'User registered successfully',
@@ -196,12 +193,6 @@ router.post('/login', validateLogin, async (req, res) => {
 
       await user.resetLoginAttempts();
 
-      // Avoid full document validation on login (some legacy user docs may be missing required fields).
-      // Only update lastLogin, and keep login working even if the document doesn't satisfy current schema.
-      const now = new Date();
-      await User.updateOne({ _id: user._id }, { $set: { lastLogin: now } });
-      user.lastLogin = now;
-
       const token = generateToken(user._id);
 
       res.json({
@@ -214,7 +205,6 @@ router.post('/login', validateLogin, async (req, res) => {
             name: user.name,
             mfaEnabled: user.mfaEnabled,
             createdAt: user.createdAt,
-            lastLogin: user.lastLogin,
             loginAttempts: user.loginAttempts
           },
           token
@@ -435,9 +425,6 @@ router.post('/biometric-login', [
     
     global.biometricChallenges.delete(email);
     
-    user.lastLogin = new Date();
-    await user.save();
-
     const token = generateToken(user._id);
 
     res.json({
@@ -534,7 +521,6 @@ router.get('/profile', authenticateToken, async (req, res) => {
           name: user.name,
           mfaEnabled: user.mfaEnabled,
           biometricEnabled: user.biometricEnabled,
-          lastLogin: user.lastLogin,
           createdAt: user.createdAt,
           preferences: user.preferences || undefined
         }
@@ -624,7 +610,6 @@ router.put('/profile', authenticateToken, async (req, res) => {
             email: fallbackUser.email,
             name: fallbackUser.name,
             mfaEnabled: fallbackUser.mfaEnabled,
-            lastLogin: fallbackUser.lastLogin,
             createdAt: fallbackUser.createdAt
           }
         }
@@ -653,7 +638,6 @@ router.put('/profile', authenticateToken, async (req, res) => {
           email: user.email,
           name: user.name,
           mfaEnabled: user.mfaEnabled,
-          lastLogin: user.lastLogin,
           createdAt: user.createdAt
         }
       }
@@ -988,9 +972,6 @@ router.post('/biometric-auth', [
 
     const token = generateToken(user._id);
     
-    user.lastLogin = new Date();
-    await user.save();
-    
     res.json({
       success: true,
       message: 'Biometric authentication successful',
@@ -1000,7 +981,6 @@ router.post('/biometric-auth', [
           email: user.email,
           name: user.name,
           mfaEnabled: user.mfaEnabled,
-          lastLogin: user.lastLogin,
           createdAt: user.createdAt
         },
         token: token,
