@@ -190,11 +190,9 @@ router.post('/login', validateLogin, async (req, res) => {
           code: 'INVALID_CREDENTIALS'
         });
       }
-
-      await user.resetLoginAttempts();
-
       const token = generateToken(user._id);
 
+      // Return auth response first to minimize sign-in spinner duration.
       res.json({
         success: true,
         message: 'Login successful',
@@ -209,6 +207,11 @@ router.post('/login', validateLogin, async (req, res) => {
           },
           token
         }
+      });
+
+      // Non-critical cleanup is deferred so response isn't blocked by DB write latency.
+      user.resetLoginAttempts().catch((resetError) => {
+        console.warn('Deferred login-attempt reset failed:', resetError.message);
       });
     } catch (error) {
       console.error('Login error:', error.message);

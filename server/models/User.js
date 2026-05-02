@@ -1,4 +1,5 @@
 const mongoose = require('mongoose');
+const argon2 = require('argon2');
 const bcrypt = require('bcryptjs');
 
 const userSchema = new mongoose.Schema({
@@ -80,13 +81,27 @@ const userSchema = new mongoose.Schema({
 userSchema.index({ email: 1 });
 userSchema.index({ createdAt: -1 });
 
+const getServerSalt = () => process.env.SERVER_SALT || 'securevault-server-salt-2025';
+
+const hashAuthSecret = async (authSecret) => {
+  const saltedKey = authSecret + getServerSalt();
+  return argon2.hash(saltedKey, {
+    type: argon2.argon2id,
+    timeCost: parseInt(process.env.ARGON2_TIME_COST || '2', 10),
+    memoryCost: parseInt(process.env.ARGON2_MEMORY_COST || '19456', 10),
+    parallelism: parseInt(process.env.ARGON2_PARALLELISM || '1', 10)
+  });
+};
+
 userSchema.pre('save', async function(next) {
-  if (this.isModified('masterKeyHash')) {
-    const serverSalt = process.env.SERVER_SALT || 'securevault-server-salt-2025';
-    const saltedKey = this.masterKeyHash + serverSalt;
-    this.masterKeyHash = await bcrypt.hash(saltedKey, 11);
+  try {
+    if (this.isModified('masterKeyHash')) {
+      this.masterKeyHash = await hashAuthSecret(this.masterKeyHash);
+    }
+    next();
+  } catch (error) {
+    next(error);
   }
-  next();
 });
 
 userSchema.methods.validateMasterKey = async function(masterKey) {
@@ -99,10 +114,14 @@ userSchema.methods.validateMasterKey = async function(masterKey) {
     throw new Error('Master key is too weak');
   }
   
-  // Must match the salt used in the pre-save hook when hashing masterKeyHash.
-  const serverSalt = process.env.SERVER_SALT || 'securevault-server-salt-2025';
-  const saltedKey = masterKey + serverSalt;
-  return await bcrypt.compare(saltedKey, this.masterKeyHash);
+  const saltedKey = masterKey + getServerSalt();
+
+  if (typeof this.masterKeyHash === 'string' && this.masterKeyHash.startsWith('$argon2')) {
+    return argon2.verify(this.masterKeyHash, saltedKey);
+  }
+
+  // Backward compatibility for existing bcrypt hashes.
+  return bcrypt.compare(saltedKey, this.masterKeyHash);
 };
 
 userSchema.methods.isLocked = function() {
