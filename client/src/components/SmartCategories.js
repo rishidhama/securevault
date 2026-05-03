@@ -181,59 +181,92 @@ const SmartCategories = ({ credentials, onUpdateCredential, onAddCredential }) =
     loadCategories();
   }, []); // Only run once on mount
 
+  // Only apply tags for credentials with no category. Re-running when `credentials`
+  // changes (e.g. after every manual category edit + refetch) would reopen the
+  // improvement modal whenever the URL pattern still disagrees with the user's choice.
   useEffect(() => {
-    // Auto-tag existing credentials after categories are loaded
-    
     if (categories.length > 0 && credentials && Array.isArray(credentials)) {
-      autoTagCredentials();
+      autoTagUncategorizedOnly();
     }
-  }, [categories, credentials]); // Run when categories or credentials change
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- credential count only; full array in deps reopens modal after every edit
+  }, [categories, credentials?.length ?? 0]);
 
-  const autoTagCredentials = async () => {
-    
+  const autoTagUncategorizedOnly = async () => {
     if (!credentials || !Array.isArray(credentials) || categories.length === 0) {
       return;
     }
-    
+
+    const updatePromises = [];
     let updatedCount = 0;
-    let improvedCount = 0;
+
+    credentials.forEach((credential) => {
+      if (!credential?.url || credential.category) return;
+      const suggestedCategory = suggestCategory(credential.url);
+      if (!suggestedCategory) return;
+      updatePromises.push(
+        credentialsAPI
+          .updateCategory(credential._id, suggestedCategory.id)
+          .then(() => {
+            updatedCount++;
+            onUpdateCredential(credential._id, { category: suggestedCategory.id });
+          })
+          .catch((error) => {
+            console.error(`Failed to update category for credential ${credential._id}:`, error);
+          })
+      );
+    });
+
+    if (updatePromises.length === 0) return;
+
+    try {
+      await Promise.all(updatePromises);
+      if (updatedCount > 0) {
+        toast.success(`Auto-tagged ${updatedCount} uncategorized credentials!`);
+      }
+    } catch (error) {
+      console.error('Error during auto-tagging:', error);
+      toast.error('Some credentials failed to auto-tag. Please try again.');
+    }
+  };
+
+  const autoTagCredentials = async () => {
+    if (!credentials || !Array.isArray(credentials) || categories.length === 0) {
+      return;
+    }
+
+    let updatedCount = 0;
     const updatePromises = [];
     const suggestions = [];
-    
-    credentials.forEach(credential => {
-      
+
+    credentials.forEach((credential) => {
       if (credential && credential.url) {
         const suggestedCategory = suggestCategory(credential.url);
-        
+
         if (suggestedCategory) {
-          // Case 1: No category assigned
           if (!credential.category) {
             updatePromises.push(
-              credentialsAPI.updateCategory(credential._id, suggestedCategory.id)
+              credentialsAPI
+                .updateCategory(credential._id, suggestedCategory.id)
                 .then(() => {
                   updatedCount++;
                   onUpdateCredential(credential._id, { category: suggestedCategory.id });
                 })
-                .catch(error => {
+                .catch((error) => {
                   console.error(`Failed to update category for credential ${credential._id}:`, error);
                 })
             );
-          }
-          // Case 2: Has category but auto-tagging suggests a better one
-          else if (credential.category !== suggestedCategory.id) {
+          } else if (credential.category !== suggestedCategory.id) {
             suggestions.push({
               credential,
               currentCategory: credential.category,
               suggestedCategory: suggestedCategory.id,
               suggestedCategoryName: suggestedCategory.name
             });
-            improvedCount++;
           }
         }
       }
     });
-    
-    // Apply auto-tagging for uncategorized credentials
+
     if (updatePromises.length > 0) {
       try {
         await Promise.all(updatePromises);
@@ -245,15 +278,14 @@ const SmartCategories = ({ credentials, onUpdateCredential, onAddCredential }) =
         toast.error('Some credentials failed to auto-tag. Please try again.');
       }
     }
-    
-    // Show suggestions for improvement
+
     if (suggestions.length > 0) {
       setConfirmData({ suggestions });
-      setSelectedImprovements(suggestions.map(s => s.credential._id)); // Auto-select all
+      setSelectedImprovements(suggestions.map((s) => s.credential._id));
       setShowConfirmModal(true);
-      return; // Don't proceed until user confirms
+      return;
     }
-    
+
     if (updatePromises.length === 0 && suggestions.length === 0) {
       toast.success('All credentials are properly categorized!');
     }

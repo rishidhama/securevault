@@ -1,0 +1,140 @@
+{
+  "meta": {
+    "url": "http://localhost:5000",
+    "durationSec": 30,
+    "rampSec": 10,
+    "pipelining": 1,
+    "connections": [
+      10,
+      25,
+      50
+    ],
+    "generatedAt": "2026-05-02T19:53:27.782Z"
+  },
+  "endpoints": {
+    "login": [
+      {
+        "connections": 10,
+        "latencyMs": {
+          "p50": 2701,
+          "p95": 8479
+        },
+        "requests": {
+          "average": 3.1,
+          "mean": 3.1
+        },
+        "throughput": {
+          "averageBytesPerSec": 4607.34
+        },
+        "errors": {
+          "errors": 0,
+          "timeouts": 0,
+          "non2xx": 0,
+          "resets": 0
+        }
+      },
+      {
+        "connections": 25,
+        "latencyMs": {
+          "p50": 5795,
+          "p95": 8056
+        },
+        "requests": {
+          "average": 3.4,
+          "mean": 3.4
+        },
+        "throughput": {
+          "averageBytesPerSec": 5053.14
+        },
+        "errors": {
+          "errors": 6,
+          "timeouts": 6,
+          "non2xx": 0,
+          "resets": 0
+        }
+      },
+      {
+        "connections": 50,
+        "latencyMs": {
+          "p50": 6610,
+          "p95": 8944
+        },
+        "requests": {
+          "average": 1.17,
+          "mean": 1.17
+        },
+        "throughput": {
+          "averageBytesPerSec": 1733.84
+        },
+        "errors": {
+          "errors": 115,
+          "timeouts": 115,
+          "non2xx": 0,
+          "resets": 0
+        }
+      }
+    ],
+    "credentials": [
+      {
+        "connections": 10,
+        "latencyMs": {
+          "p50": 2,
+          "p95": 6
+        },
+        "requests": {
+          "average": 3317.64,
+          "mean": 3317.64
+        },
+        "throughput": {
+          "averageBytesPerSec": 13581312
+        },
+        "errors": {
+          "errors": 0,
+          "timeouts": 0,
+          "non2xx": 0,
+          "resets": 0
+        }
+      },
+      {
+        "connections": 25,
+        "latencyMs": {
+          "p50": 3,
+          "p95": 15
+        },
+        "requests": {
+          "average": 2572.7,
+          "mean": 2572.7
+        },
+        "throughput": {
+          "averageBytesPerSec": 10531908.27
+        },
+        "errors": {
+          "errors": 17,
+          "timeouts": 17,
+          "non2xx": 0,
+          "resets": 0
+        }
+      },
+      {
+        "connections": 50,
+        "latencyMs": {
+          "p50": 11,
+          "p95": 28
+        },
+        "requests": {
+          "average": 2518.7,
+          "mean": 2518.7
+        },
+        "throughput": {
+          "averageBytesPerSec": 10310892.81
+        },
+        "errors": {
+          "errors": 0,
+          "timeouts": 0,
+          "non2xx": 0,
+          "resets": 0
+        }
+      }
+    ]
+  }
+}

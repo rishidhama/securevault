@@ -6,7 +6,10 @@
   "scripts": {
     "start": "node index.js",
     "dev": "nodemon index.js",
-    "test": "jest"
+    "test": "jest",
+    "loadtest:login": "node scripts/load-test.js login",
+    "loadtest:credentials": "node scripts/load-test.js credentials",
+    "loadtest:matrix": "node scripts/load-matrix.js"
   },
   "keywords": [
     "password-manager",
@@ -37,5 +40,8 @@
   },
   "engines": {
     "node": ">=18.0.0"
+  },
+  "devDependencies": {
+    "autocannon": "^8.0.0"
   }
 }
