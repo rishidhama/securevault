@@ -316,18 +316,15 @@ class PersistentBlockchainDecoder {
   async getLatestQueuedOperationsDue(maxAgeMs, limitUsers = 20) {
     try {
       const cutoff = new Date(Date.now() - maxAgeMs);
-      const dueQueued = await BlockchainPendingOperation.find({
+      // Any user with at least one queued row older than cutoff (do not use a global row
+      // limit — that starved users whose ops were not among the N oldest rows in the DB).
+      const userIds = await BlockchainPendingOperation.distinct('userId', {
         status: 'queued',
         createdAt: { $lte: cutoff }
-      })
-        .sort({ createdAt: 1 })
-        .limit(limitUsers * 5);
-
-      if (!dueQueued.length) return [];
-
-      const userIds = Array.from(new Set(dueQueued.map((op) => op.userId))).slice(0, limitUsers);
+      });
+      const slice = userIds.slice(0, Math.max(1, limitUsers));
       const latestByUser = await Promise.all(
-        userIds.map(async (userId) => {
+        slice.map(async (userId) => {
           const latest = await BlockchainPendingOperation.findOne({ userId, status: 'queued' })
             .sort({ createdAt: -1 });
           if (!latest) return null;
@@ -342,6 +339,24 @@ class PersistentBlockchainDecoder {
       return latestByUser.filter(Boolean);
     } catch (error) {
       console.error('Failed to get due queued operations:', error.message);
+      return [];
+    }
+  }
+
+  async getUsersWithQueuedCountAtLeast(minCount, limitUsers = 50) {
+    try {
+      const n = Math.max(1, parseInt(minCount, 10) || 1);
+      const lim = Math.max(1, parseInt(limitUsers, 10) || 50);
+      const rows = await BlockchainPendingOperation.aggregate([
+        { $match: { status: 'queued' } },
+        { $group: { _id: '$userId', queuedRows: { $sum: 1 } } },
+        { $match: { queuedRows: { $gte: n } } },
+        { $sort: { queuedRows: -1 } },
+        { $limit: lim }
+      ]);
+      return rows.map((r) => ({ userId: r._id, queuedRows: r.queuedRows }));
+    } catch (error) {
+      console.error('Failed to get users by queued count:', error.message);
       return [];
     }
   }

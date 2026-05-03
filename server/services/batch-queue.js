@@ -1,8 +1,8 @@
 /**
  * Batch Queue Service
- * 
- * Coalesces vault updates and flushes when there are 10-20 changes or after 30 minutes.
- * Supports both L1 and L2 contracts.
+ *
+ * In-memory: flush after BATCH_MIN_UPDATES hash changes, BATCH_MAX_UPDATES cap (immediate), or BATCH_MAX_WAIT_MS.
+ * Persisted DB: flush when queued row count per user ≥ MIN, or any row older than MAX_WAIT (see decoder; uses distinct users).
  */
 
 const ethereumService = require('./ethereum-service');
@@ -12,10 +12,13 @@ class BatchQueue {
   constructor() {
     this.pending = new Map();
     this.minUpdates = parseInt(process.env.BATCH_MIN_UPDATES || '10', 10);
-    this.maxUpdates = parseInt(process.env.BATCH_MAX_UPDATES || '20', 10);
+    this.maxUpdates = parseInt(process.env.BATCH_MAX_UPDATES || '15', 10);
     this.checkIntervalMs = parseInt(process.env.BATCH_CHECK_INTERVAL || '30000', 10);
     this.maxWaitMs = parseInt(process.env.BATCH_MAX_WAIT_MS || String(30 * 60 * 1000), 10);
     this.maxRetries = parseInt(process.env.BATCH_MAX_RETRIES || '3', 10);
+    if (this.minUpdates > this.maxUpdates) {
+      this.maxUpdates = this.minUpdates;
+    }
     this.checkTimer = null;
     this.stats = {
       totalQueued: 0,
@@ -179,27 +182,98 @@ class BatchQueue {
     return this.flushDueUsers();
   }
 
-  async flushPersistedDueUsers() {
+  async flushPersistedCountDueUsers() {
+    if (!ethereumService.initialized) {
+      return { success: true, flushed: 0, mode: 'persisted-count-skip-no-eth' };
+    }
     try {
-      // Persisted queued rows survive restarts; process rows older than maxWait.
+      const users = await blockchainDecoder.getUsersWithQueuedCountAtLeast(this.minUpdates, this.maxUpdates);
+      if (!users.length) {
+        return { success: true, flushed: 0, mode: 'persisted-count-noop' };
+      }
+
+      let flushed = 0;
+      for (const { userId, queuedRows } of users) {
+        try {
+          const latest = await blockchainDecoder.getLatestQueuedOperation(userId);
+          if (!latest?.vaultHash) continue;
+          // eslint-disable-next-line no-await-in-loop
+          const r = await ethereumService.storeVaultHash(latest.userId, latest.vaultHash, {
+            mode: 'per_user_batch',
+            usersInBatch: Math.max(1, queuedRows || this.minUpdates)
+          });
+          if (r?.success && r?.txHash) {
+            // eslint-disable-next-line no-await-in-loop
+            await blockchainDecoder.markAnchoredForUser(latest.userId, {
+              txHash: r.txHash,
+              blockNumber: r.blockNumber,
+              vaultHash: latest.vaultHash,
+              anchoredAt: r.blockTimestamp ? new Date(r.blockTimestamp * 1000) : undefined
+            });
+            this._markFlushed(latest.userId);
+            flushed += 1;
+          } else {
+            this.stats.totalFailed += 1;
+            // eslint-disable-next-line no-console
+            console.error(
+              '[batch] persisted count flush failed',
+              { userId: latest.userId, error: r?.error || 'no txHash' }
+            );
+          }
+        } catch (e) {
+          this.stats.totalFailed += 1;
+          // eslint-disable-next-line no-console
+          console.error('[batch] persisted count flush error', { userId, message: e.message });
+        }
+      }
+
+      if (flushed > 0) {
+        this.stats.totalIndividual += flushed;
+      }
+      return { success: true, flushed, mode: 'persisted-count' };
+    } catch (error) {
+      this.stats.totalFailed += 1;
+      // eslint-disable-next-line no-console
+      console.error('[batch] persisted count flush fatal', error.message);
+      return { success: false, flushed: 0, mode: 'persisted-count-error', error: error.message };
+    }
+  }
+
+  async flushPersistedDueUsers() {
+    if (!ethereumService.initialized) {
+      return { success: true, flushed: 0, mode: 'persisted-age-skip-no-eth' };
+    }
+    try {
       const due = await blockchainDecoder.getLatestQueuedOperationsDue(this.maxWaitMs, this.maxUpdates);
       if (!due.length) return { success: true, flushed: 0, mode: 'persisted-noop' };
 
       let flushed = 0;
       for (const item of due) {
-        // eslint-disable-next-line no-await-in-loop
-        const r = await ethereumService.storeVaultHash(item.userId, item.vaultHash);
-        if (r?.success && r?.txHash) {
+        try {
           // eslint-disable-next-line no-await-in-loop
-          await blockchainDecoder.markAnchoredForUser(item.userId, {
-            txHash: r.txHash,
-            blockNumber: r.blockNumber,
-            vaultHash: item.vaultHash,
-            anchoredAt: r.blockTimestamp ? new Date(r.blockTimestamp * 1000) : undefined
-          });
-          flushed += 1;
-        } else {
+          const r = await ethereumService.storeVaultHash(item.userId, item.vaultHash);
+          if (r?.success && r?.txHash) {
+            // eslint-disable-next-line no-await-in-loop
+            await blockchainDecoder.markAnchoredForUser(item.userId, {
+              txHash: r.txHash,
+              blockNumber: r.blockNumber,
+              vaultHash: item.vaultHash,
+              anchoredAt: r.blockTimestamp ? new Date(r.blockTimestamp * 1000) : undefined
+            });
+            this._markFlushed(item.userId);
+            flushed += 1;
+          } else {
+            this.stats.totalFailed += 1;
+            // eslint-disable-next-line no-console
+            console.error(
+              '[batch] persisted age flush failed',
+              { userId: item.userId, error: r?.error || 'no txHash' }
+            );
+          }
+        } catch (e) {
           this.stats.totalFailed += 1;
+          // eslint-disable-next-line no-console
+          console.error('[batch] persisted age flush error', { userId: item.userId, message: e.message });
         }
       }
 
@@ -209,6 +283,8 @@ class BatchQueue {
       return { success: true, flushed, mode: 'persisted-individual' };
     } catch (error) {
       this.stats.totalFailed += 1;
+      // eslint-disable-next-line no-console
+      console.error('[batch] persisted age flush fatal', error.message);
       return { success: false, flushed: 0, mode: 'persisted-error', error: error.message };
     }
   }
@@ -237,14 +313,20 @@ class BatchQueue {
         if (this.getTotalPendingCount() > 0) {
           await this.flushDueUsers();
         }
-        // Also check DB-persisted queued ops that may outlive process restarts.
+        if (process.env.BATCH_ENABLED === 'true') {
+          await this.flushPersistedCountDueUsers();
+        }
         await this.flushPersistedDueUsers();
       } catch (error) {
+        // eslint-disable-next-line no-console
         console.error('Periodic flush error:', error.message);
       }
     }, this.checkIntervalMs);
 
-    console.log(`Batch queue: check every ${this.checkIntervalMs}ms, flush at ${this.minUpdates}-${this.maxUpdates} updates or ${this.maxWaitMs}ms`);
+    // eslint-disable-next-line no-console
+    console.log(
+      `Batch queue: every ${this.checkIntervalMs}ms | in-memory ${this.minUpdates}-${this.maxUpdates} | persisted ≥${this.minUpdates} rows or ${this.maxWaitMs}ms age`
+    );
   }
 
   stopFlushTimer() {
