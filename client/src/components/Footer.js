@@ -8,7 +8,7 @@ const Footer = () => {
         <div className="flex flex-col items-center gap-3 text-sm">
           <nav className="flex flex-wrap items-center justify-center gap-x-5 gap-y-2 text-secondary-600">
             <a
-              href="https://drive.google.com/file/d/1alEDqS-xwyzoSphqOT_9yGkgum0mU7Bv/view?usp=drive_link"
+              href="https://drive.google.com/file/d/18fiiB2KkprccsF8eQ16ETK2kgm1HUibH/view?usp=drive_link"
               target="_blank"
               rel="noreferrer"
               className="hover:text-primary-600 transition-colors inline-flex items-center gap-2"
