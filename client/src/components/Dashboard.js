@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { 
   Plus, 
@@ -57,6 +57,13 @@ const Dashboard = ({
   const totalItems = Number.isFinite(pagination?.total) ? pagination.total : credentials.length;
   const rangeStart = totalItems > 0 ? (currentResolvedPage - 1) * (pagination?.limit || pageSize || 1) + 1 : 0;
   const rangeEnd = totalItems > 0 ? Math.min(totalItems, rangeStart + credentials.length - 1) : 0;
+  const decryptedPasswords = useMemo(() => {
+    const map = {};
+    for (const credential of credentials) {
+      map[credential._id] = decryptPassword(credential.encryptedPassword, credential.iv, credential.salt);
+    }
+    return map;
+  }, [credentials, decryptPassword]);
 
   useEffect(() => {
     setPageInput(String(currentResolvedPage));
@@ -68,7 +75,7 @@ const Dashboard = ({
       setIsCheckingBreaches(true);
       const newMap = {};
       for (const cred of credentials) {
-        const password = decryptPassword(cred.encryptedPassword, cred.iv, cred.salt);
+        const password = decryptedPasswords[cred._id];
         if (password) {
           const count = await checkPasswordBreach(password);
           if (!isMounted) return;
@@ -86,7 +93,7 @@ const Dashboard = ({
       setBreachMap({});
     }
     return () => { isMounted = false; };
-  }, [credentials, decryptPassword]);
+  }, [credentials, decryptedPasswords]);
 
   const totalBreached = Object.values(breachMap).filter(count => count > 0).length;
 
@@ -341,12 +348,12 @@ const Dashboard = ({
                           <span className="text-secondary-600">Password:</span>
                           <span className={`font-mono ${
                             showPasswords[credential._id] && 
-                            decryptPassword(credential.encryptedPassword, credential.iv, credential.salt).includes('***') 
+                            (decryptedPasswords[credential._id] || '').includes('***') 
                               ? 'text-danger-600' 
                               : 'text-secondary-900'
                           }`}>
                             {showPasswords[credential._id] 
-                              ? decryptPassword(credential.encryptedPassword, credential.iv, credential.salt)
+                              ? (decryptedPasswords[credential._id] || '')
                               : '----------------'
                             }
                           </span>
@@ -359,22 +366,22 @@ const Dashboard = ({
                           </button>
                           <button
                             onClick={() => {
-                              const decryptedPassword = decryptPassword(credential.encryptedPassword, credential.iv, credential.salt);
+                              const decryptedPassword = decryptedPasswords[credential._id] || '';
                               if (!decryptedPassword.includes('***')) {
                                 handleCopyToClipboard(decryptedPassword);
                               }
                             }}
                             className={`${
-                              decryptPassword(credential.encryptedPassword, credential.iv, credential.salt).includes('***')
+                              (decryptedPasswords[credential._id] || '').includes('***')
                                 ? 'text-secondary-300 cursor-not-allowed'
                                 : 'text-primary-600 hover:text-primary-700'
                             }`}
                             title={
-                              decryptPassword(credential.encryptedPassword, credential.iv, credential.salt).includes('***')
+                              (decryptedPasswords[credential._id] || '').includes('***')
                                 ? 'Cannot copy - decryption failed'
                                 : 'Copy password'
                             }
-                            disabled={decryptPassword(credential.encryptedPassword, credential.iv, credential.salt).includes('***')}
+                            disabled={(decryptedPasswords[credential._id] || '').includes('***')}
                           >
                             <Copy className="w-3 h-3" />
                           </button>

@@ -310,9 +310,15 @@ function App() {
         setCategories(categoriesResponse.data || categoriesResponse || []);
       });
 
-      if (creds.length > 0) {
-        await merkleTree.initFromCredentials(creds);
-      }
+      runAfterFirstPaint(() => {
+        if (creds.length > 0) {
+          merkleTree.initFromCredentials(creds).catch(() => {
+            // Non-blocking: local tree sync failure should not delay dashboard paint.
+          });
+          return;
+        }
+        merkleTree.clear();
+      });
 
       if (masterKey) {
         warmDecryptCacheIncremental(creds, masterKey).catch(() => {});
