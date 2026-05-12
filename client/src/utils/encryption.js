@@ -78,7 +78,12 @@ class VaultCrypt {
   }
 
   getOrGenerateUserSalt(userIdentifier) {
-    const hash = CryptoJS.SHA256(`securevault-user-salt-${userIdentifier}`).toString();
+    // Normalize so login, profile restore, and signup always derive the same salt (emails are case-insensitive).
+    const normalized = String(userIdentifier ?? '').trim().toLowerCase();
+    if (!normalized) {
+      throw new Error('User identifier is required for vault salt');
+    }
+    const hash = CryptoJS.SHA256(`securevault-user-salt-${normalized}`).toString();
     // Convert hex hash to bytes and take first 16 bytes
     const bytes = [];
     for (let i = 0; i < 32 && bytes.length < 16; i += 2) {

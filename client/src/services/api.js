@@ -1,6 +1,8 @@
-const API_BASE_URL = process.env.REACT_APP_API_URL || 
-  (process.env.NODE_ENV === 'production' 
-    ? window.location.origin 
+// CRA inlines REACT_APP_* at build time. For a split deploy (static site + separate API host), set
+// REACT_APP_API_URL on the host that runs `npm run build` (e.g. Vercel) and redeploy so the bundle points at your API.
+const API_BASE_URL = process.env.REACT_APP_API_URL ||
+  (process.env.NODE_ENV === 'production'
+    ? window.location.origin
     : 'http://localhost:5000');
 
 const responseCache = new Map();

@@ -1,6 +1,10 @@
 const mongoose = require('mongoose');
+const crypto = require('crypto');
+const { promisify } = require('util');
 const argon2 = require('argon2');
 const bcrypt = require('bcryptjs');
+
+const pbkdf2 = promisify(crypto.pbkdf2);
 
 const userSchema = new mongoose.Schema({
   email: {

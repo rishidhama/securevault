@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate, useLocation, Link } from 'react-router-dom';
 import { Toaster, toast } from 'react-hot-toast';
 import { Shield, Lock, LogOut } from 'lucide-react';
@@ -97,6 +97,7 @@ function App() {
     hasPrevPage: false
   });
   const [merkleTree] = useState(() => new IncrementalMerkleTree());
+  const masterKeyRef = useRef('');
   /** Bumped after async decrypt-cache warm so UI re-reads the cache (sync decrypt only reads cache). */
   const [decryptCacheEpoch, setDecryptCacheEpoch] = useState(0);
   const bumpDecryptCacheEpoch = useCallback(() => {
@@ -221,12 +222,36 @@ function App() {
             sessionStorage.setItem('securevault_master_key', storedMasterKey);
             setMasterKey(storedMasterKey);
             // Same as post-login: WebCrypto session state is in-memory only and is lost on refresh.
+            let parsedStoredUser = null;
             try {
-              const userIdentifier = nextUser.email || nextUser.id;
-              const userSalt = encryptionService.getOrGenerateUserSalt(userIdentifier);
-              await encryptionService.initializeSessionVaultKey(storedMasterKey, userSalt);
+              parsedStoredUser = storedUser ? JSON.parse(storedUser) : null;
             } catch {
-              // Non-blocking: legacy or edge cases should not block restoring the session shell.
+              parsedStoredUser = null;
+            }
+            const userIdentifier =
+              nextUser?.email ||
+              nextUser?.id ||
+              parsedStoredUser?.email ||
+              parsedStoredUser?.id;
+            if (!userIdentifier) {
+              toast.error('Cannot restore encryption: user profile has no id or email. Log out and sign in again.', {
+                duration: 6000
+              });
+            } else {
+              try {
+                const userSalt = encryptionService.getOrGenerateUserSalt(userIdentifier);
+                await encryptionService.initializeSessionVaultKey(storedMasterKey, userSalt);
+              } catch (vaultErr) {
+                if (typeof window !== 'undefined' && (!window.crypto || !window.crypto.subtle)) {
+                  toast.error(
+                    'Vault decryption needs a secure context. Open this app over HTTPS (or localhost), not plain HTTP.',
+                    { duration: 6000 }
+                  );
+                } else if (process.env.NODE_ENV === 'development') {
+                  // eslint-disable-next-line no-console
+                  console.warn('initializeSessionVaultKey after refresh:', vaultErr);
+                }
+              }
             }
           }
           setIsAuthenticated(true);
@@ -278,7 +303,7 @@ function App() {
   useEffect(() => {
     if (!isAuthenticated) return;
     loadData(currentPage, { allowInitialLoading: isInitialAuthCheck });
-  }, [isAuthenticated, currentPage, pageSize, debouncedSearchTerm, selectedCategory, showFavorites]);
+  }, [isAuthenticated, masterKey, currentPage, pageSize, debouncedSearchTerm, selectedCategory, showFavorites]);
 
   // Keep decrypt cache warm whenever we have both masterKey + credentials.
   // This prevents "Decryption not ready" during rerenders (e.g. toggling favorites).
@@ -363,8 +388,8 @@ function App() {
         merkleTree.clear();
       });
 
-      if (masterKey) {
-        warmDecryptCacheIncremental(creds, masterKey).catch(() => {});
+      if (masterKeyRef.current) {
+        warmDecryptCacheIncremental(creds, masterKeyRef.current).catch(() => {});
       }
     } catch (error) {
       setCredentials([]);
@@ -630,6 +655,8 @@ function App() {
     },
     [masterKey, decryptCacheEpoch]
   );
+
+  masterKeyRef.current = masterKey;
 
   // Only show loading spinner during initial auth check, not during data loading
   if (isLoading && isInitialAuthCheck) {

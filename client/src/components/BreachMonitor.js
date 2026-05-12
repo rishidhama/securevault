@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { 
   Shield, 
   AlertTriangle, 
@@ -20,6 +21,7 @@ import toast from 'react-hot-toast';
 import { checkPasswordBreach } from '../utils/encryption';
 
 const BreachMonitor = ({ credentials, decryptPassword, onUpdateCredential }) => {
+  const navigate = useNavigate();
   const [breachData, setBreachData] = useState({});
   const [isScanning, setIsScanning] = useState(false);
   const [lastScan, setLastScan] = useState(null);
@@ -348,11 +350,8 @@ const BreachMonitor = ({ credentials, decryptPassword, onUpdateCredential }) => 
                    </div>
                   <div className="flex items-center gap-2">
                                          <button
-                       onClick={() => {
-                         // Trigger password change reminder
-                         const websiteName = credential.url || 'Unknown Website';
-                         toast.success(`Reminder: Change password for ${websiteName}`);
-                       }}
+                       type="button"
+                       onClick={() => navigate(`/edit/${encodeURIComponent(credId)}`)}
                        className="btn-secondary text-sm"
                      >
                       <Zap className="w-4 h-4" />
@@ -489,13 +488,10 @@ const BreachMonitor = ({ credentials, decryptPassword, onUpdateCredential }) => 
                         {notification.type === 'breach' && (
                           <div className="flex items-center gap-1">
                                                          <button
+                               type="button"
                                onClick={() => {
-                                 // Navigate to edit the breached credential
-                                 const credential = credentials.find(c => c._id === notification.credentialId);
-                                 if (credential) {
-                                   const websiteName = credential.url || 'Unknown Website';
-                                   toast.success(`Opening ${websiteName} for password change`);
-                                   // You can add navigation logic here if needed
+                                 if (notification.credentialId) {
+                                   navigate(`/edit/${encodeURIComponent(notification.credentialId)}`);
                                  }
                                }}
                                className="text-xs bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300 hover:bg-red-200 dark:hover:bg-red-900/50 px-2 py-1 rounded transition-colors"
