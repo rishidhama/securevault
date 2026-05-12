@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate, useLocation, Link } from 'react-router-dom';
 import { Toaster, toast } from 'react-hot-toast';
 import { Shield, Lock, LogOut } from 'lucide-react';
@@ -181,7 +181,18 @@ function App() {
     try {
       const token = localStorage.getItem('securevault_token');
       const storedUser = localStorage.getItem('securevault_user');
-      const storedMasterKey = sessionStorage.getItem('securevault_master_key');
+      let storedMasterKey = sessionStorage.getItem('securevault_master_key');
+      if (!storedMasterKey && storedUser) {
+        try {
+          const parsed = JSON.parse(storedUser);
+          const email = typeof parsed?.email === 'string' ? parsed.email.trim().toLowerCase() : '';
+          if (email) {
+            storedMasterKey = sessionStorage.getItem(`securevault_master_key_${email}`);
+          }
+        } catch {
+          // ignore invalid cached user JSON
+        }
+      }
 
       // If no session exists, user needs to login (master key will be entered during login)
       if (!token || !storedUser) {
@@ -194,9 +205,19 @@ function App() {
         const response = await authAPI.profile();
 
         if (response.success) {
-          setUser(response.data.user);
+          const nextUser = response.data.user;
+          setUser(nextUser);
           if (storedMasterKey) {
+            sessionStorage.setItem('securevault_master_key', storedMasterKey);
             setMasterKey(storedMasterKey);
+            // Same as post-login: WebCrypto session state is in-memory only and is lost on refresh.
+            try {
+              const userIdentifier = nextUser.email || nextUser.id;
+              const userSalt = encryptionService.getOrGenerateUserSalt(userIdentifier);
+              await encryptionService.initializeSessionVaultKey(storedMasterKey, userSalt);
+            } catch {
+              // Non-blocking: legacy or edge cases should not block restoring the session shell.
+            }
           }
           setIsAuthenticated(true);
         } else {
@@ -218,6 +239,18 @@ function App() {
   };
 
   const clearAuthData = () => {
+    try {
+      const storedUser = localStorage.getItem('securevault_user');
+      if (storedUser) {
+        const parsed = JSON.parse(storedUser);
+        const email = typeof parsed?.email === 'string' ? parsed.email.trim().toLowerCase() : '';
+        if (email) {
+          sessionStorage.removeItem(`securevault_master_key_${email}`);
+        }
+      }
+    } catch {
+      // ignore
+    }
     localStorage.removeItem('securevault_token');
     localStorage.removeItem('securevault_user');
     sessionStorage.removeItem('securevault_master_key');
@@ -573,13 +606,13 @@ function App() {
     }
   };
 
-  const decryptPassword = (encryptedPassword, iv, salt) => {
+  const decryptPassword = useCallback((encryptedPassword, iv, salt) => {
     try {
       return encryptionService.decryptPassword(encryptedPassword, masterKey, iv, salt);
     } catch (error) {
       return '*** Decryption Failed ***';
     }
-  };
+  }, [masterKey]);
 
   // Only show loading spinner during initial auth check, not during data loading
   if (isLoading && isInitialAuthCheck) {
