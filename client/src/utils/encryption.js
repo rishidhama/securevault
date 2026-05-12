@@ -247,6 +247,11 @@ class VaultCrypt {
   }
 
   async decryptPasswordAsync(encryptedPassword, masterKey, iv, salt) {
+    if (typeof window !== 'undefined' && (!window.crypto || !window.crypto.subtle)) {
+      throw new Error(
+        'Web Crypto (subtle) is unavailable. Use HTTPS or http://localhost — not a plain HTTP host.'
+      );
+    }
     let key;
     
     // NEW FORMAT: If salt matches session salt, use session vault key

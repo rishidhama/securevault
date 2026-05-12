@@ -97,6 +97,11 @@ function App() {
     hasPrevPage: false
   });
   const [merkleTree] = useState(() => new IncrementalMerkleTree());
+  /** Bumped after async decrypt-cache warm so UI re-reads the cache (sync decrypt only reads cache). */
+  const [decryptCacheEpoch, setDecryptCacheEpoch] = useState(0);
+  const bumpDecryptCacheEpoch = useCallback(() => {
+    setDecryptCacheEpoch((n) => n + 1);
+  }, []);
 
   const warmDecryptCacheIncremental = async (creds, key) => {
     if (!key || !Array.isArray(creds) || creds.length === 0) return;
@@ -108,11 +113,16 @@ function App() {
       await encryptionService.warmDecryptCache(firstChunk, key);
     } catch {
       // Non-blocking: keep UI responsive even if initial warm fails.
+    } finally {
+      bumpDecryptCacheEpoch();
     }
 
     if (!remainder.length) return;
     runInIdle(() => {
-      encryptionService.warmDecryptCache(remainder, key).catch(() => {});
+      encryptionService
+        .warmDecryptCache(remainder, key)
+        .then(() => bumpDecryptCacheEpoch())
+        .catch(() => {});
     });
   };
 
@@ -518,7 +528,10 @@ function App() {
       setCredentials(nextCredentials);
       setStats(prev => ({ ...prev, total: prev.total + 1 }));
 
-      try { await encryptionService.warmDecryptCache([newCredentialData], masterKey); } catch (_) {}
+      try {
+        await encryptionService.warmDecryptCache([newCredentialData], masterKey);
+        bumpDecryptCacheEpoch();
+      } catch (_) {}
 
       try {
         await merkleTree.initFromCredentials(nextCredentials);
@@ -606,13 +619,17 @@ function App() {
     }
   };
 
-  const decryptPassword = useCallback((encryptedPassword, iv, salt) => {
-    try {
-      return encryptionService.decryptPassword(encryptedPassword, masterKey, iv, salt);
-    } catch (error) {
-      return '*** Decryption Failed ***';
-    }
-  }, [masterKey]);
+  const decryptPassword = useCallback(
+    (encryptedPassword, iv, salt) => {
+      void decryptCacheEpoch;
+      try {
+        return encryptionService.decryptPassword(encryptedPassword, masterKey, iv, salt);
+      } catch (error) {
+        return '*** Decryption Failed ***';
+      }
+    },
+    [masterKey, decryptCacheEpoch]
+  );
 
   // Only show loading spinner during initial auth check, not during data loading
   if (isLoading && isInitialAuthCheck) {
