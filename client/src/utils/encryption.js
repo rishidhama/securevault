@@ -257,6 +257,9 @@ class VaultCrypt {
         'Web Crypto (subtle) is unavailable. Use HTTPS or http://localhost — not a plain HTTP host.'
       );
     }
+    if (!masterKey || typeof masterKey !== 'string' || masterKey.trim() === '') {
+      throw new Error('Master key is required for decryption');
+    }
     let key;
     
     // NEW FORMAT: If salt matches session salt, use session vault key
@@ -304,7 +307,14 @@ class VaultCrypt {
             const plaintext = await this.decryptPasswordAsync(encryptedPassword, masterKey, iv, salt);
             this._decryptCache.set(cacheKey, plaintext);
           } catch (e) {
-            console.warn('Failed to warm decrypt cache for item:', e.message);
+            const name = e && e.name ? e.name : 'Error';
+            const msg = e && e.message ? e.message : '';
+            console.warn('Failed to warm decrypt cache for item:', msg || name, e);
+            if (name === 'OperationError' && !msg) {
+              console.warn(
+                'If the master key is correct, try a window without wallet extensions (e.g. MetaMask injects SES / lockdown-install.js and can break Web Crypto).'
+              );
+            }
           }
         })
       );

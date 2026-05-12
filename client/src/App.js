@@ -219,8 +219,9 @@ function App() {
           const nextUser = response.data.user;
           setUser(nextUser);
           if (storedMasterKey) {
-            sessionStorage.setItem('securevault_master_key', storedMasterKey);
-            setMasterKey(storedMasterKey);
+            const trimmedKey = storedMasterKey.trim();
+            sessionStorage.setItem('securevault_master_key', trimmedKey);
+            setMasterKey(trimmedKey);
             // Same as post-login: WebCrypto session state is in-memory only and is lost on refresh.
             let parsedStoredUser = null;
             try {
@@ -420,7 +421,7 @@ function App() {
       }
       
       setUser(authData.user);
-      const masterKey = authData.masterKey || '';
+      const masterKey = (authData.masterKey || '').trim();
       setMasterKey(masterKey);
       setIsAuthenticated(true);
       
@@ -454,14 +455,14 @@ function App() {
       }
     } catch (error) {
       setUser(authData.user);
-      setMasterKey(authData.masterKey || '');
+      setMasterKey((authData.masterKey || '').trim());
       setIsAuthenticated(true);
     }
   };
 
   const handleSignupSuccess = async (authData) => {
     setUser(authData.user);
-    const masterKey = authData.masterKey || '';
+    const masterKey = (authData.masterKey || '').trim();
     setMasterKey(masterKey);
     setIsAuthenticated(true);
     
